@@ -57,10 +57,9 @@ export const drawElement = (ctx, element) => {
 };
 
 export const redrawCanvas = (ctx, width, height, elements) => {
-    // Clear canvas
-    ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, width, height);
-    
+    // Clear to transparent so the CSS grid background of .canvas-surface shows
+    ctx.clearRect(0, 0, width, height);
+
     // Redraw all elements
     elements.forEach(element => {
         drawElement(ctx, element);

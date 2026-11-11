@@ -2,9 +2,13 @@
 
 > Live progress tracker for CoLab — a from-scratch collaborative drawing app.
 
-## Current Phase: Phase 4 (Real-time) in progress — Phases 1–3 largely done
+## Current Phase: Phase 7 (UI/UX & Design System) — built, awaiting user review
 
-**Completed:** ~3.5 of 6 phases
+**Goal shift (2026-11-12):** move from prototype → **production-grade, real-world
+usable** app, step by step. **First step = full UI overhaul** (Gen Z / professional
+style) — implemented, see `PHASE_7_UI_UX.md`. Next step: user review + direction.
+
+**Completed:** ~3.5 of 7 phases
 
 ### Phase status overview
 
@@ -16,9 +20,10 @@
 | 4 — Real-time Collaboration | 🟡 Partial | ~50% |
 | 5 — Features | 🔴 Early | ~20% |
 | 6 — Quality & Deploy | ⬜ Not started | 0% |
+| **7 — UI/UX & Design System** | 🟢 Done (pending review) | ~95% |
 
-**Overall:** ~55% — basic real-time drawing works end-to-end; chat UI,
-persistence, rooms, auth, tests, and deployment are still ahead.
+**Overall:** ~50% — basic real-time drawing works end-to-end; UI overhaul is the
+active step, then chat UI, persistence, rooms, auth, tests, and deployment.
 
 ---
 
@@ -68,7 +73,8 @@ persistence, rooms, auth, tests, and deployment are still ahead.
 - `AGENTS.md` — working pattern + landmines for any AI/human picking this up
 - `docs/plan/PROGRESS.md` — this tracker
 - `docs/plan/WORKLOG.md` — work log (commits + what was built)
-- `docs/plan/PHASE_1_ANALYSIS.md` … `PHASE_6_QUALITY_DEPLOY.md` — per-phase detail
+- `docs/plan/PHASE_1_ANALYSIS.md` … `PHASE_7_UI_UX.md` — per-phase detail
+- `docs/plan/PHASE_7_UI_UX.md` — **current step:** UI overhaul plan
 - `Backend/src/server.js` — active socket logic (inline)
 - `Frontend/src/hooks/useSocket.js` — socket connection + emits
 - `Frontend/src/hooks/useCanvas.js` — drawing logic
