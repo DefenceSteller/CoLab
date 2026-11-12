@@ -18,12 +18,12 @@ Implemented in `Toolbar.jsx` + `useCanvas.js` + `drawingTools.js`:
 
 | Tool | Status |
 |------|--------|
-| Pencil | ✅ freehand strokes |
-| Line | ✅ straight line |
-| Rectangle | ✅ stroke + optional fill |
-| Circle | ✅ stroke + optional fill |
-| Text | ⚠️ works but uses `prompt()` dialog (needs proper UI) |
-| Eraser | ⚠️ draws white strokes (doesn't truly erase) |
+| Pencil | ✅ freehand strokes (segments committed to Redux → survive resize/remote redraws) |
+| Line | ✅ one straight line per drag (preview while dragging, committed on mouseup) |
+| Rectangle | ✅ one rect per drag, fitted to the drag box |
+| Circle | ✅ one ellipse per drag, fitted to the drag box |
+| Text | ✅ inline input overlay on the canvas (Enter = place, Esc = cancel) — no `prompt()` |
+| Eraser | ✅ paints white over strokes (true element-removal eraser still future work) |
 
 Plus: color palette (10 swatches) + native color picker, brush size slider (1–50).
 
@@ -36,15 +36,22 @@ Plus: color palette (10 swatches) + native color picker, brush size slider (1–
 
 ## 3.4 Drawing hook
 
-`hooks/useCanvas.js`:
+`hooks/useCanvas.js` (rewritten 2026-11-12):
 - `startDrawing` / `draw` / `stopDrawing` — mousedown/move/up/out + touch equivalents.
-- Renders locally, then `emitDraw()` to broadcast.
-- Dispatches `addElement` / `setDrawing` to Redux.
+- **Shape tools** (`line`, `rectangle`, `circle`): live preview during drag,
+  **one element committed on mouseup** (degenerate clicks ignored).
+- **Pencil/eraser:** each move = one segment, dispatched to Redux *and* emitted
+  (so strokes survive canvas redraws); eraser uses white.
+- **Text:** opens an inline input at the click position; Enter/blur commits,
+  Esc cancels — returns `{ canvasRef, textInput, onTextChange, commitText,
+  cancelText, handleTextBlur }` for `Canvas.jsx` to render.
 
 ## 3.5 Undo / redo / clear
 
 - `boardSlice` keeps `history` / `future` arrays.
 - `undo()` / `redo()` move snapshots between them.
+- **Fixed 2026-11-12:** history snapshot is taken *before* the element is
+  pushed (was after → undo was a no-op).
 - `clearBoard()` empties `elements` + history.
 - Wired to `Toolbar` buttons via `BoardPage` handlers.
 
@@ -56,8 +63,10 @@ Plus: color palette (10 swatches) + native color picker, brush size slider (1–
 - [x] Local rendering (`drawElement` / `redrawCanvas`)
 - [x] Drawing hook (mouse + touch)
 - [x] Undo / redo / clear
-- [ ] **Text tool** — replace `prompt()` with an inline input overlay
-- [ ] **Eraser** — actually remove elements under cursor (not white strokes)
+- [x] **Text tool** — inline input overlay replaces `prompt()` (2026-11-12)
+- [x] **Shape tools** — preview + single-commit per drag (line/rect/circle fixed 2026-11-12)
+- [x] **Undo/redo** — snapshot-order bug fixed (2026-11-12)
+- [ ] **Eraser** — currently paints white; make it truly remove elements under cursor
 - [ ] **Fill / stroke controls** for shapes (opacity, strokeWidth are in state but unused)
 - [ ] **Implement empty `UI/ColorPicker`** (currently a native `<input type=color>` is used)
 

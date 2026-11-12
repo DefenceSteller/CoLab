@@ -3,10 +3,11 @@ import { useDispatch, useSelector } from 'react-redux';
 import Canvas from '../components/Board/Canvas';
 import Toolbar from '@/components/Board/Toolbar';
 import { clearBoard, undo, redo } from '../store/slices/boardSlice';
-import { useSocket } from '../hooks/useSocket';
+import { useSocket, useSocketListeners } from '../hooks/useSocket';
 
 const BoardPage = () => {
   const dispatch = useDispatch();
+  useSocketListeners(); // attach global socket listeners exactly once
   const { emitClearBoard } = useSocket();
   const { username, isConnected, color } = useSelector((state) => state.user);
   const collaboratorCount = useSelector(

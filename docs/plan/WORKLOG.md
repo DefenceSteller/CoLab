@@ -43,14 +43,15 @@
   color input, brush size slider, undo / redo / clear actions.
 - **`components/UI/Button.jsx`, `UI/ColorPicker.jsx`** — **empty placeholders**.
 - **`hooks/useCanvas.js`** — drawing: `startDrawing` / `draw` / `stopDrawing`,
-  mouse + touch events, renders locally via `drawElement`, emits via
-  `socket.emitDraw`. Text tool uses `prompt()`.
-- **`hooks/useSocket.js`** — creates socket connection, subscribes to
-  `draw` / `cursor-move` / `user-joined` / `user-left` / `chat-message` /
-  `clear-board`, dispatches to Redux, exposes `emitDraw` / `emitCursorMove` /
+  mouse + touch events. Shapes preview during drag and commit **once** on
+  mouseup; pencil/eraser commit per-segment (locally + socket); text tool uses
+  an **inline input overlay** (no `prompt()`).
+- **`hooks/useSocket.js`** — **singleton socket** + `useSocketListeners()`
+  (attached once from `BoardPage`), subscribes to
+  `draw` / `cursor-move` / `user-left` / `chat-message` / `clear-board`,
+  dispatches to Redux, exposes `emitDraw` / `emitCursorMove` /
   `emitChatMessage` / `emitClearBoard`.
-  - **Bug:** creates a **new socket per call**; called from 2 components →
-    2 connections per client.
+  - ~~Bug: new socket per call~~ — **fixed 2026-11-12** (one connection per client).
 - **`hooks/useBoard.js`** — **empty placeholder**.
 - **`store/store.js`** — `configureStore` with `board`, `tool`, `user` reducers;
   `serializableCheck: false`.
@@ -71,12 +72,46 @@
 
 - **Drawing pipeline (working):** local render → `emitDraw` → server broadcast →
   other clients `addElement` → `redrawCanvas`.
-- **Real-time (working):** strokes sync across clients; new joiners receive the
-  server's `boardHistory`.
+- **Real-time (working):** strokes sync across clients (server broadcasts to
+  everyone except the sender; no board-state/history relay yet).
 
 ---
 
 ## 🛠️ Session notes
+
+### 2026-11-12 — drawing tools fixed (line / rect / circle / text / eraser)
+- **Reported** via screenshots in `Downloads/tools/`: line drew jagged
+  freehand strokes, rect/circle drew *chains* of tiny shapes along the drag
+  path, text opened a separate `prompt()` dialog and never appeared on the
+  canvas, eraser behaviour unclear.
+- **Root causes found:**
+  1. Every `mousemove` committed a **new element** (shapes were emitted per
+     move instead of once per drag).
+  2. `drawElement` had **no `text` case** — text could never render even if
+     it had been created.
+  3. `circle` used from→to as a single point pair instead of the drag box.
+  4. `useSocket()` created a **new socket per call** (2 connections/client).
+  5. Local pencil strokes were **never dispatched to Redux** — only painted
+     on the canvas — so any redraw (resize, remote stroke) wiped them.
+  6. `boardSlice` pushed history **after** adding the element → undo was a
+     no-op.
+- **Fixes:**
+  - `drawingTools.js` — added `text` rendering (`fillText`), circle = ellipse
+    fitted to the drag box, clear-to-transparent.
+  - `useCanvas.js` — rewritten: shape **preview during drag + single commit
+    on mouseup** (with degenerate-click guard), pencil/eraser segments
+    committed to Redux, eraser paints white, **inline text input state**
+    (Enter = place, Esc = cancel, blur = commit).
+  - `Canvas.jsx` — inline text editor overlay positioned on the canvas
+    (replaces the `prompt()` dialog).
+  - `useSocket.js` — **singleton socket** + `useSocketListeners()` attached
+    once in `BoardPage`; `clear-board` listener now dispatches `clearBoard`
+    (frontend half of landmine #6 — server still doesn't relay it).
+  - `boardSlice.js` — history snapshot taken **before** pushing the element
+    (undo/redo now works).
+- **Verified:** Vite HMR compiled with **no errors**, HTTP 200 on :5173.
+- **Known follow-ups:** backend doesn't relay `clear-board`/`cursor-move`;
+  undo granularity is per-segment for freehand strokes.
 
 ### 2026-11-12 — goal shift → production-grade; Phase 7 (UI) overhaul built
 - **Decision:** app is "too basic" — goal is now real-world / production-level

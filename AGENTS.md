@@ -133,18 +133,22 @@ them:
 3. **Empty files:** `components/UI/Button.jsx`, `components/UI/ColorPicker.jsx`,
    `hooks/useBoard.js` are all 0 bytes — placeholders, not implemented.
 
-4. **`useSocket()` creates a NEW socket every time it's called.** Both
-   `BoardPage.jsx` and `Canvas.jsx` call it, so **two sockets connect per
-   client**. Should be a singleton (module-level instance) or React context.
-   This is a real bug — fix before adding more callers.
+4. **~~`useSocket()` creates a NEW socket every time it's called.~~ FIXED
+   (2026-11-12).** `useSocket.js` now uses a module-level **singleton** socket,
+   and global listeners are attached exactly once via `useSocketListeners()`
+   (called from `BoardPage.jsx`). Don't add new `socket.on(...)` calls inside
+   `useSocket()` — put them in `useSocketListeners()` with a matching `socket.off`
+   cleanup.
 
 5. **Board state is in-memory only.** The server keeps `boardHistory` (max 100)
    and it's lost on restart. No database, no persistence, no rooms — a fresh
    server means a fresh (empty) board.
 
-6. **`clear-board` isn't handled on the frontend.** `useSocket` listens but the
-   callback is empty (`// Handle board clear from other users`). Clearing from
-   one client doesn't clear others.
+6. **`clear-board` is only half-wired.** The frontend listener now dispatches
+   `clearBoard()` (fixed 2026-11-12), **but `Backend/src/server.js` does not
+   relay `clear-board`** (it only relays `draw` and `chat-message`), so clearing
+   from one client still doesn't reach others. Same gap for `cursor-move` /
+   presence events. Fix belongs in `server.js`.
 
 7. **No auth / no rooms.** Everyone joins one global board. `username` is a
    random `User_NNNN`.

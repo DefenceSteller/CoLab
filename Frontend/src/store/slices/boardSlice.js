@@ -14,8 +14,9 @@ const boardSlice = createSlice({
   initialState,
   reducers: {
     addElement: (state, action) => {
-      state.elements.push(action.payload);
+      // Snapshot BEFORE pushing, so undo actually removes the new element
       state.history.push([...state.elements]);
+      state.elements.push(action.payload);
       state.future = [];
     },
     clearBoard: (state) => {
