@@ -79,6 +79,49 @@
 
 ## 🛠️ Session notes
 
+### 2026-11-16 — **Rooms / Sessions feature built & protocol-verified**
+
+**User's exact ask:** "start session" button → link popup → share link → user 2
+clicks and lands on the same board; user 3 without a link works separately or
+creates their own link; **max 5 users per link**.
+
+**Backend (`Backend/src/server.js` rewritten):**
+- `create-room` / `join-room` / `leave-room` ack callbacks (8s timeout client-side).
+- Per-room element storage (`elements[]`) with replay to new joiners.
+- Room-scoped relay: `socket.to(room)` for `draw`, `io.to(room)` for `clear-board`
+  + `chat-message`, `room-users` broadcasts on join/leave/disconnect.
+- 5-user cap (`MAX_ROOM_SIZE = 5`) — `full` / `not-found` errors in ack.
+- `MAX_ROOM_ELEMENTS = 20000` memory cap per room (oldest dropped).
+- Empty rooms are **kept until server restart** so shared links stay valid.
+- Disconnect cleanup leaves the room, broadcasts updated member list.
+
+**Frontend:**
+- `App.jsx` — session gate: landing vs board, auto-join from `?room=ABC123`,
+  Start Session flow, error banners for `full` / `not-found`.
+- `pages/Landing.jsx` — start screen with "Start a session" button (neobrutalist style).
+- `components/Session/ShareModal.jsx` — link popup with copy button, room code,
+  capacity pill (`N/5 people`), animated entrance.
+- `BoardPage.jsx` — removed `useSocketListeners()` call (moved to session gate),
+  replaced collaborator count with `{roomUsers.length}/5 people` pill, added
+  Share button in header (re-opens the link popup).
+- `hooks/useSocket.js` — `createRoom`/`joinRoom` timeout-promise helpers,
+  `room-users` listener → `setRoomUsers`, **rejoin-on-reconnect** (reconnect mints
+  a new socket id → server forgot membership → auto rejoin + board replay).
+- `store/slices/boardSlice.js` — `roomId`, `roomUsers`, `setRoomId`,
+  `setRoomUsers`, `loadBoard` (replaces whole board on replay).
+
+**Protocol verified (19/19 assertions pass headlessly):**
+- create-room returns 6-char ID + maxUsers=5
+- join-room replays existing strokes + broadcasts 2 members
+- draw relay only to the *other* client (sender excluded)
+- unknown room returns `not-found`
+- 6th user rejected with `full` when room is at 5/5
+- clear-board wipes stored state (future joiner gets 0 elements)
+
+**Docs updated:** `PHASE_5_FEATURES.md` (rooms section → ✅ DONE),
+`PROGRESS.md` (Phase 5 ~60%, rooms complete), `AGENTS.md` (deployment section
+refreshed).
+
 ### 2026-11-16 — backend deployed to Railway → **full stack live**
 - **Host chosen: Railway** — free trial ($5 / 30 days, **no credit card**),
   CLI-driven like Vercel. (Render's free backend tier no longer exists.)

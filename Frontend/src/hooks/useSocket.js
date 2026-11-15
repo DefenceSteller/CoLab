@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { io } from 'socket.io-client';
 import { useDispatch } from 'react-redux';
+import { store } from '../store/store';
 import { setUserId, setConnected } from '../store/slices/userSlice';
 import {
   addElement,
@@ -8,6 +9,8 @@ import {
   removeCollaborator,
   addChatMessage,
   clearBoard,
+  setRoomUsers,
+  loadBoard,
 } from '../store/slices/boardSlice';
 
 // Socket server URL — set VITE_SOCKET_URL in production (.env),
@@ -34,7 +37,7 @@ const getSocket = () => {
 
 /**
  * Attach the global socket listeners exactly once.
- * Call this from a top-level component (BoardPage).
+ * Call this from the session gate (App.jsx → <Session />).
  */
 export const useSocketListeners = () => {
   const dispatch = useDispatch();
@@ -46,6 +49,16 @@ export const useSocketListeners = () => {
       console.log('Connected to server:', socket.id);
       dispatch(setUserId(socket.id));
       dispatch(setConnected(true));
+
+      // Reconnect = new socket id → the server forgot our room membership.
+      // Rejoin it (and re-sync the board) so drawing keeps working.
+      const { roomId } = store.getState().board;
+      if (roomId) {
+        const { username } = store.getState().user;
+        joinRoom(roomId, username).then((res) => {
+          if (res.ok) dispatch(loadBoard(res.elements));
+        });
+      }
     };
     const onDisconnect = () => {
       console.log('Disconnected from server');
@@ -67,6 +80,7 @@ export const useSocketListeners = () => {
     const onUserLeft = (data) => dispatch(removeCollaborator(data.id));
     const onChatMessage = (data) => dispatch(addChatMessage(data));
     const onClearBoard = () => dispatch(clearBoard());
+    const onRoomUsers = (members) => dispatch(setRoomUsers(members));
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
@@ -75,6 +89,7 @@ export const useSocketListeners = () => {
     socket.on('user-left', onUserLeft);
     socket.on('chat-message', onChatMessage);
     socket.on('clear-board', onClearBoard);
+    socket.on('room-users', onRoomUsers);
 
     // The singleton may already be connected before this mounts
     // (e.g. StrictMode remount) — sync state right away.
@@ -88,9 +103,30 @@ export const useSocketListeners = () => {
       socket.off('user-left', onUserLeft);
       socket.off('chat-message', onChatMessage);
       socket.off('clear-board', onClearBoard);
+      socket.off('room-users', onRoomUsers);
     };
   }, [dispatch]);
 };
+
+/** Create a new session (room) → resolves { ok, roomId, elements, maxUsers }. */
+const createRoom = (username) =>
+  new Promise((resolve) => {
+    getSocket()
+      .timeout(8000)
+      .emit('create-room', { username }, (err, res) =>
+        resolve(err ? { ok: false, error: 'timeout' } : res)
+      );
+  });
+
+/** Join a session by room id → resolves { ok, roomId, elements } or { ok:false, error }. */
+const joinRoom = (roomId, username) =>
+  new Promise((resolve) => {
+    getSocket()
+      .timeout(8000)
+      .emit('join-room', { roomId, username }, (err, res) =>
+        resolve(err ? { ok: false, error: 'timeout' } : res)
+      );
+  });
 
 /** Emit helpers — safe to call from any component. */
 export const useSocket = () => {
@@ -107,5 +143,7 @@ export const useSocket = () => {
     emitCursorMove,
     emitChatMessage,
     emitClearBoard,
+    createRoom,
+    joinRoom,
   };
 };

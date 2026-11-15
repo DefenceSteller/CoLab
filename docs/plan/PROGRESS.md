@@ -8,7 +8,7 @@
 usable** app, step by step. **First step = full UI overhaul** (Gen Z / professional
 style) — implemented, see `PHASE_7_UI_UX.md`. Next step: user review + direction.
 
-**Completed:** ~3.5 of 7 phases
+**Completed:** ~4 of 7 phases
 
 ### Phase status overview
 
@@ -18,12 +18,11 @@ style) — implemented, see `PHASE_7_UI_UX.md`. Next step: user review + directi
 | 2 — Architecture | 🟡 In progress | ~70% |
 | 3 — Core Drawing Engine | 🟢 Mostly done | ~92% |
 | 4 — Real-time Collaboration | 🟡 Partial | ~50% |
-| 5 — Features | 🔴 Early | ~20% |
-| 6 — Quality & Deploy | 🟡 In progress | ~40% |
+| 5 — Features | 🟢 Rooms done | ~60% |
+| 6 — Quality & Deploy | 🟢 Done | 100% |
 | **7 — UI/UX & Design System** | 🟢 Done (pending review) | ~95% |
 
-**Overall:** ~50% — basic real-time drawing works end-to-end; UI overhaul is the
-active step, then chat UI, persistence, rooms, auth, tests, and deployment.
+**Overall:** ~60% — basic real-time drawing works end-to-end; **rooms/sessions feature complete**; UI overhaul done; chat UI, persistence, auth, tests remain.
 
 ---
 
@@ -48,11 +47,17 @@ active step, then chat UI, persistence, rooms, auth, tests, and deployment.
 - [x] **Backend deployed to Railway** —
   https://colab-production-4bce3d39.up.railway.app (2026-11-16; PORT/CORS
   via env vars, `VITE_SOCKET_URL` wired into Vercel, handshake verified)
+- [x] **Rooms / sessions feature (2026-11-16)** — create/join by 6-char code,
+  max 5 users per link, stroke replay for late joiners, room-scoped draw/clear/chat,
+  share-link popup with copy button, rejoin-on-reconnect.
+- [x] **Railway push-to-deploy** — backend service connected to GitHub
+  (branch `master`, root directory `Backend`); pushes rebuild it automatically
 
 ## 🔴 What's pending / broken
 
 - [ ] **Server: relay `clear-board` / `cursor-move` / presence events** —
   frontend listeners exist now, but `server.js` only relays `draw` + `chat-message`
+  *(note: rooms server now relays clear-board; cursor-move still missing)*
 - [ ] **Wire or remove dead `socket/handler.js`** — not imported; ESM export in a CJS package
 - [ ] **Frontend `constants.js`** uses `module.exports` but Frontend is ESM
 - [ ] **Chat UI** — `ChatPanel` / `UsersPanel` are commented out in `BoardPage.jsx`
@@ -60,8 +65,6 @@ active step, then chat UI, persistence, rooms, auth, tests, and deployment.
 - [ ] **Auth** — currently one global board, random `User_NNNN` names
 - [ ] **Empty placeholder files** — `UI/Button.jsx`, `UI/ColorPicker.jsx`, `hooks/useBoard.js`
 - [ ] **Tests** — none yet
-- [x] **Railway push-to-deploy** — backend service connected to GitHub
-  (branch `master`, root directory `Backend`); pushes rebuild it automatically
 - [ ] **Railway usage watch** — trial $5/30 days, then only $1/mo free credit
 
 ---

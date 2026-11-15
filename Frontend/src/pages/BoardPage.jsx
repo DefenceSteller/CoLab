@@ -3,16 +3,14 @@ import { useDispatch, useSelector } from 'react-redux';
 import Canvas from '../components/Board/Canvas';
 import Toolbar from '@/components/Board/Toolbar';
 import { clearBoard, undo, redo } from '../store/slices/boardSlice';
-import { useSocket, useSocketListeners } from '../hooks/useSocket';
+import { useSocket } from '../hooks/useSocket';
+import { Share2, Users } from 'lucide-react';
 
-const BoardPage = () => {
+const BoardPage = ({ onShare }) => {
   const dispatch = useDispatch();
-  useSocketListeners(); // attach global socket listeners exactly once
   const { emitClearBoard } = useSocket();
   const { username, isConnected, color } = useSelector((state) => state.user);
-  const collaboratorCount = useSelector(
-    (state) => Object.keys(state.board.collaborators).length
-  );
+  const roomUsers = useSelector((state) => state.board.roomUsers);
 
   const handleClear = () => {
     dispatch(clearBoard());
@@ -52,21 +50,34 @@ const BoardPage = () => {
               }`}
             />
             {isConnected ? 'LIVE' : 'OFFLINE'}
-            {collaboratorCount > 0 && (
-              <span className="font-medium opacity-70">· {collaboratorCount + 1}</span>
-            )}
+          </span>
+
+          {/* Session capacity pill */}
+          <span className="inline-flex items-center gap-1.5 border-2 border-ink rounded-full px-2.5 py-1 text-[11px] font-bold shadow-[2px_2px_0_#101014] bg-sun">
+            <Users size={12} />
+            {roomUsers.length}/5 people
           </span>
         </div>
 
-        {/* User chip */}
-        <div className="flex items-center gap-2 bg-white border-2 border-ink rounded-full pl-1 pr-3 py-1 shadow-[3px_3px_0_#101014]">
-          <div
-            className="w-7 h-7 rounded-full border-2 border-ink grid place-items-center text-xs font-bold"
-            style={{ backgroundColor: color, color: '#fff' }}
+        {/* Right side: share + user chip */}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onShare}
+            className="tool-btn bg-lime"
+            title="Copy the invite link"
           >
-            {username?.charAt(0)?.toUpperCase() || 'U'}
+            <Share2 size={14} />
+            Share
+          </button>
+          <div className="flex items-center gap-2 bg-white border-2 border-ink rounded-full pl-1 pr-3 py-1 shadow-[3px_3px_0_#101014]">
+            <div
+              className="w-7 h-7 rounded-full border-2 border-ink grid place-items-center text-xs font-bold"
+              style={{ backgroundColor: color, color: '#fff' }}
+            >
+              {username?.charAt(0)?.toUpperCase() || 'U'}
+            </div>
+            <span className="text-sm font-semibold">{username}</span>
           </div>
-          <span className="text-sm font-semibold">{username}</span>
         </div>
       </header>
 

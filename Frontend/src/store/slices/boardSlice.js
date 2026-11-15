@@ -7,6 +7,8 @@ const initialState = {
   isDrawing: false,
   collaborators: {},
   chatMessages: [],
+  roomId: null,
+  roomUsers: [],
 };
 
 const boardSlice = createSlice({
@@ -51,6 +53,18 @@ const boardSlice = createSlice({
     setDrawing: (state, action) => {
       state.isDrawing = action.payload;
     },
+    setRoomId: (state, action) => {
+      state.roomId = action.payload;
+    },
+    setRoomUsers: (state, action) => {
+      state.roomUsers = action.payload;
+    },
+    // Replace the whole board (used when joining a room that already has content)
+    loadBoard: (state, action) => {
+      state.elements = action.payload || [];
+      state.history = [];
+      state.future = [];
+    },
   },
 });
 
@@ -63,6 +77,9 @@ export const {
   removeCollaborator,
   addChatMessage,
   setDrawing,
+  setRoomId,
+  setRoomUsers,
+  loadBoard,
 } = boardSlice.actions;
 
 export default boardSlice.reducer;
