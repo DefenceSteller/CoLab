@@ -97,9 +97,14 @@
 - **Result:** https://colab-gold.vercel.app is wired end-to-end to the hosted
   backend (handshake verified server-side; browser test pending).
 - **Caveats / follow-ups:** Railway trial ends → Free plan gives only $1/mo
-  credit (an always-on service may exceed it — watch usage). Railway service
-  deploys from local upload (`railway up`); **GitHub push-to-deploy not yet
-  connected** for the backend (dashboard step).
+  credit (an always-on service may exceed it — watch usage).
+- **GitHub connected (push-to-deploy):** `railway service source connect
+  --repo DefenceSteller/CoLab --branch master` + `rootDirectory: Backend` set
+  via `serviceInstanceUpdate` (monorepo — first connect-triggered build failed
+  from repo root until this was set). Redeploy of commit `05a7478` from GitHub
+  → **SUCCESS** (meta confirms `repo`, `rootDirectory`, branch). Backend pushes
+  to `master` now auto-deploy. CLI note: PowerShell mangles JSON args for
+  `railway api --variables` — use `--file`/`@file` instead.
 
 ### 2026-11-16 — frontend deployed to Vercel
 - **Prep:** `useSocket.js` socket URL now reads `import.meta.env.VITE_SOCKET_URL`

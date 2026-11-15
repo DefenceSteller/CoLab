@@ -80,6 +80,20 @@ npm run dev          # vite → http://localhost:5173
 
 Open two browser tabs on `:5173` to see real-time sync.
 
+## Deployment (live)
+
+- **Frontend → Vercel:** https://colab-gold.vercel.app
+  - Project `colab`; **Git-connected** → pushes to `master` auto-deploy.
+  - `VITE_SOCKET_URL` env var (production) points at the Railway backend.
+- **Backend → Railway:** https://colab-production-4bce3d39.up.railway.app
+  - Project `colab`, service connected to this repo: branch `master`,
+    **root directory `Backend`** (never remove — the repo is a monorepo and a
+    root-level build fails).
+  - Vars: `CORS_ORIGIN=https://colab-gold.vercel.app`, `NODE_ENV=production`.
+  - Pushes to `master` auto-deploy. Manual: `railway up` from `Backend/`.
+- Local dev is unaffected: without env vars everything falls back to
+  `localhost:5000` / `localhost:5173`.
+
 ## Working patterns & conventions
 
 Follow these — they're how this codebase is written:

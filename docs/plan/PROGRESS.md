@@ -60,8 +60,8 @@ active step, then chat UI, persistence, rooms, auth, tests, and deployment.
 - [ ] **Auth** — currently one global board, random `User_NNNN` names
 - [ ] **Empty placeholder files** — `UI/Button.jsx`, `UI/ColorPicker.jsx`, `hooks/useBoard.js`
 - [ ] **Tests** — none yet
-- [ ] **Railway GitHub auto-deploy** — backend deployed via local upload
-  (`railway up`); connect repo in Railway dashboard for push-to-deploy
+- [x] **Railway push-to-deploy** — backend service connected to GitHub
+  (branch `master`, root directory `Backend`); pushes rebuild it automatically
 - [ ] **Railway usage watch** — trial $5/30 days, then only $1/mo free credit
 
 ---

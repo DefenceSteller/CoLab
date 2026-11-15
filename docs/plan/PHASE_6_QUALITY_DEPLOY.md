@@ -48,7 +48,8 @@ Currently **no tests at all**.
   `CORS_ORIGIN` (comma-separated); Railway var =
   `https://colab-gold.vercel.app`
 - [ ] README: setup + deploy steps
-- [ ] Railway: connect GitHub repo (currently deployed via `railway up` upload)
+- [x] Railway: connect GitHub repo — connected (branch `master`, root
+  directory `Backend`); pushes to `master` auto-deploy both apps
 
 ## 6.6 Deliverables
 
