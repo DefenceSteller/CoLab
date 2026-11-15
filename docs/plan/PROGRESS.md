@@ -19,7 +19,7 @@ style) — implemented, see `PHASE_7_UI_UX.md`. Next step: user review + directi
 | 3 — Core Drawing Engine | 🟢 Mostly done | ~92% |
 | 4 — Real-time Collaboration | 🟡 Partial | ~50% |
 | 5 — Features | 🔴 Early | ~20% |
-| 6 — Quality & Deploy | ⬜ Not started | 0% |
+| 6 — Quality & Deploy | 🟡 In progress | ~40% |
 | **7 — UI/UX & Design System** | 🟢 Done (pending review) | ~95% |
 
 **Overall:** ~50% — basic real-time drawing works end-to-end; UI overhaul is the
@@ -43,6 +43,11 @@ active step, then chat UI, persistence, rooms, auth, tests, and deployment.
   `redrawCanvas`, `createElement`
 - [x] **Socket draw broadcast** — server relays strokes to other clients
 - [x] **Undo/redo** — snapshot-order bug fixed (was a no-op)
+- [x] **Frontend deployed to Vercel** — https://colab-gold.vercel.app
+  (2026-11-16; GitHub integration connected → pushes auto-deploy)
+- [x] **Backend deployed to Railway** —
+  https://colab-production-4bce3d39.up.railway.app (2026-11-16; PORT/CORS
+  via env vars, `VITE_SOCKET_URL` wired into Vercel, handshake verified)
 
 ## 🔴 What's pending / broken
 
@@ -55,7 +60,9 @@ active step, then chat UI, persistence, rooms, auth, tests, and deployment.
 - [ ] **Auth** — currently one global board, random `User_NNNN` names
 - [ ] **Empty placeholder files** — `UI/Button.jsx`, `UI/ColorPicker.jsx`, `hooks/useBoard.js`
 - [ ] **Tests** — none yet
-- [ ] **Deployment** — none yet
+- [ ] **Railway GitHub auto-deploy** — backend deployed via local upload
+  (`railway up`); connect repo in Railway dashboard for push-to-deploy
+- [ ] **Railway usage watch** — trial $5/30 days, then only $1/mo free credit
 
 ---
 

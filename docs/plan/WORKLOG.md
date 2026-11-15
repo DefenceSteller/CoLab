@@ -79,6 +79,44 @@
 
 ## 🛠️ Session notes
 
+### 2026-11-16 — backend deployed to Railway → **full stack live**
+- **Host chosen: Railway** — free trial ($5 / 30 days, **no credit card**),
+  CLI-driven like Vercel. (Render's free backend tier no longer exists.)
+- **Backend changes for cloud** (`server.js`): `PORT` from env (host-assigned,
+  fallback 5000), CORS origins from `CORS_ORIGIN` (comma-separated), loads
+  `dotenv`; `dotenv` moved dev → production `dependencies`.
+- **Railway:** CLI login → project `colab` → `railway up` from `Backend/` →
+  service **Online**; public domain
+  **https://colab-production-4bce3d39.up.railway.app** — verified HTTP 200
+  and socket.io handshake returning
+  `Access-Control-Allow-Origin: https://colab-gold.vercel.app`.
+- **Railway vars:** `CORS_ORIGIN=https://colab-gold.vercel.app`,
+  `NODE_ENV=production`.
+- **Vercel wiring:** `VITE_SOCKET_URL` added (production) → frontend
+  redeployed → verified the Railway URL is present in the live JS bundle.
+- **Result:** https://colab-gold.vercel.app is wired end-to-end to the hosted
+  backend (handshake verified server-side; browser test pending).
+- **Caveats / follow-ups:** Railway trial ends → Free plan gives only $1/mo
+  credit (an always-on service may exceed it — watch usage). Railway service
+  deploys from local upload (`railway up`); **GitHub push-to-deploy not yet
+  connected** for the backend (dashboard step).
+
+### 2026-11-16 — frontend deployed to Vercel
+- **Prep:** `useSocket.js` socket URL now reads `import.meta.env.VITE_SOCKET_URL`
+  (falls back to `http://localhost:5000` in dev); production build verified
+  (`vite build` — clean, 272 kB JS / 88 kB gzip).
+- **Vercel:** logged in via CLI, linked `Frontend/` as project **`colab`**
+  (scope `hashims-projects-c6ccab3b`) — Vite auto-detected (build `vite build`,
+  output `dist`).
+- **Production URL: https://colab-gold.vercel.app** — deployment READY,
+  verified public HTTP 200 (no deployment-protection wall).
+- **GitHub integration connected** → pushes to `master` now auto-deploy.
+- `.vercel/` added to `Frontend/.gitignore`.
+- **Known gap:** backend can't run on Vercel (Socket.io needs a long-running
+  server; Vercel is serverless) → next step: host `Backend/` on Render/Railway
+  and set `VITE_SOCKET_URL` in Vercel project env vars. Until then the deployed
+  site shows **Offline** (UI works, no real-time sync).
+
 ### 2026-11-12 — drawing tools fixed (line / rect / circle / text / eraser)
 - **Reported** via screenshots in `Downloads/tools/`: line drew jagged
   freehand strokes, rect/circle drew *chains* of tiny shapes along the drag

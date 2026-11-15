@@ -10,7 +10,10 @@ import {
   clearBoard,
 } from '../store/slices/boardSlice';
 
-const SOCKET_URL = 'http://localhost:5000';
+// Socket server URL — set VITE_SOCKET_URL in production (.env),
+// falls back to the local dev server.
+const SOCKET_URL =
+  import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
 
 // Singleton: ONE socket per page, shared by every hook consumer.
 // (Previously each useSocket() call created a new socket, so BoardPage +

@@ -1,7 +1,7 @@
 # Phase 6: Quality & Deploy
 
-**Status:** ⬜ Not started (0%)
-**Started:** —
+**Status:** 🟡 In progress (~40%)
+**Started:** 2026-11-16
 
 > Tests, error handling, performance, and getting CoLab running somewhere
 > other than localhost.
@@ -31,17 +31,24 @@ Currently **no tests at all**.
 
 - [ ] Resolve `handler.js` vs inline `server.js`
 - [ ] Fix ESM/CJS `constants.js`
-- [ ] Fix duplicate `useSocket()` connections
+- [x] Fix duplicate `useSocket()` connections — **done 2026-11-12 (singleton)**
 - [ ] Remove or implement empty placeholder files
 - [ ] Single source of truth for socket event names
 
 ## 6.5 Deployment
 
-- [ ] Backend → Render / Railway / Fly.io (WebSockets need sticky sessions)
-- [ ] Frontend → Vercel / Netlify
-- [ ] Env vars: `VITE_SOCKET_URL` (currently hardcoded `http://localhost:5000`)
-- [ ] CORS: allow production frontend origin
+- [x] **Backend → Railway** — project `colab`, deployed via `railway up` from
+  `Backend/`; public domain https://colab-production-4bce3d39.up.railway.app
+  (verified HTTP 200 + socket.io handshake with CORS)
+- [x] **Frontend → Vercel** — project `colab`; production
+  https://colab-gold.vercel.app (GitHub integration → push-to-deploy)
+- [x] **Env vars: `VITE_SOCKET_URL`** — set in Vercel (production), baked into
+  the build (verified in live JS bundle)
+- [x] **CORS: allow production frontend origin** — `server.js` reads
+  `CORS_ORIGIN` (comma-separated); Railway var =
+  `https://colab-gold.vercel.app`
 - [ ] README: setup + deploy steps
+- [ ] Railway: connect GitHub repo (currently deployed via `railway up` upload)
 
 ## 6.6 Deliverables
 
