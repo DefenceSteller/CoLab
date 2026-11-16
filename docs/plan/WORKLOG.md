@@ -120,6 +120,15 @@ a stray test file that broke Vercel auto-builds) as `9860295`; restored
 behind **Deployment Protection** (Vercel login page) — always verify via
 `colab-gold.vercel.app`.
 
+**Push-to-deploy FIXED (same day):** every git-push build had *always* failed
+(`BUILD_UTILS_SPAWN_127: vite: command not found`) — Vercel was building at the
+**repo root**, which has no `package.json` (monorepo: code lives in
+`Frontend/`). All previous "Ready" deployments were manual CLI deploys (no git
+SHA). Fix: set project **Root Directory = `Frontend`** (Vercel API
+`PATCH /v9/projects/{id}`). Verified: redeploy of the fix commit built from git
+in 15s, auto-aliased to `colab-gold.vercel.app`, bundle contains the
+`parseAck` fix + Railway URL.
+
 ### 2026-11-16 — **Rooms / Sessions feature built & protocol-verified**
 
 **User's exact ask:** "start session" button → link popup → share link → user 2

@@ -57,6 +57,10 @@ style) — implemented, see `PHASE_7_UI_UX.md`. Next step: user review + directi
   (no backend change); 8/8 live tests, deployed to `colab-gold.vercel.app`.
 - [x] **Railway push-to-deploy** — backend service connected to GitHub
   (branch `master`, root directory `Backend`); pushes rebuild it automatically
+- [x] **Vercel push-to-deploy FIXED (2026-11-16)** — project Root Directory was
+  `.` (repo root, no `package.json`) so every git build died with `vite: command
+  not found`; set Root Directory = `Frontend`. Git pushes now build + alias
+  `colab-gold.vercel.app` automatically.
 
 ## 🔴 What's pending / broken
 
