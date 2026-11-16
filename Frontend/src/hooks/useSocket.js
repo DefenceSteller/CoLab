@@ -5,6 +5,7 @@ import { store } from '../store/store';
 import { setUserId, setConnected } from '../store/slices/userSlice';
 import {
   addElement,
+  removeElements,
   updateCollaborator,
   removeCollaborator,
   addChatMessage,
@@ -69,6 +70,10 @@ export const useSocketListeners = () => {
       // ever carries remote strokes.
       dispatch(addElement(data));
     };
+    const onDeleteElements = (ids) => {
+      // Remote eraser pass — ids only, removal is local + idempotent.
+      if (Array.isArray(ids) && ids.length) dispatch(removeElements(ids));
+    };
     const onCursorMove = (data) =>
       dispatch(
         updateCollaborator({
@@ -85,6 +90,7 @@ export const useSocketListeners = () => {
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('draw', onDraw);
+    socket.on('delete-elements', onDeleteElements);
     socket.on('cursor-move', onCursorMove);
     socket.on('user-left', onUserLeft);
     socket.on('chat-message', onChatMessage);
@@ -99,6 +105,7 @@ export const useSocketListeners = () => {
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('draw', onDraw);
+      socket.off('delete-elements', onDeleteElements);
       socket.off('cursor-move', onCursorMove);
       socket.off('user-left', onUserLeft);
       socket.off('chat-message', onChatMessage);
@@ -157,6 +164,7 @@ export const useSocket = () => {
   const socket = getSocket();
 
   const emitDraw = (data) => socket.emit('draw', data);
+  const emitDeleteElements = (ids) => socket.emit('delete-elements', ids);
   const emitCursorMove = (position) => socket.emit('cursor-move', position);
   const emitChatMessage = (message) => socket.emit('chat-message', message);
   const emitClearBoard = () => socket.emit('clear-board');
@@ -164,6 +172,7 @@ export const useSocket = () => {
   return {
     socket,
     emitDraw,
+    emitDeleteElements,
     emitCursorMove,
     emitChatMessage,
     emitClearBoard,

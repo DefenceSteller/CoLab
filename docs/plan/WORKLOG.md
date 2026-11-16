@@ -79,6 +79,64 @@
 
 ## 🛠️ Session notes
 
+### 2026-11-17 — **Excalidraw-parity plan: Phase 1 (Foundation) built & verified**
+
+**Goal (user request):** give CoLab every tool/functionality Excalidraw has.
+10-phase plan agreed: 1 Foundation · 2 Viewport · 3 Selection · 4 New tools ·
+5 Property panel · 6 History+text · 7 Shortcuts+menus · 8 Export/import ·
+9 Realtime sync · 10 Docs/tests/deploy. **Phase 1 = done this session.**
+
+**Built:**
+- `utils/elementModel.js` **(new)** — Excalidraw-shaped elements (`id`,
+  `x/y/width/height`, `angle`, `points[]`, `strokeColor/backgroundColor/
+  fillStyle/strokeWidth/strokeStyle/opacity/roughness`, `text/fontSize/
+  fontFamily/textAlign`, `seed/version`), `createElement`, legacy
+  `{type,from,to}` ingest (`normalizeElement`/`normalizeScene`, merges old
+  pencil segments into multi-point strokes + **dedupes by id** for live
+  chunks replayed on rejoin), bounds + rotation-aware hit-testing.
+- `utils/viewport.js` **(new)** — `screen = world * zoom + offset` math,
+  zoom clamp 0.1–4, `zoomAtScreenPoint`, `viewportForBounds`.
+- `utils/renderer.js` **(new)** — **roughjs** renderer (same lib Excalidraw
+  uses): drawable cache keyed by style+geometry (x/y/angle via ctx transform,
+  4000-entry LRU-ish), dashed/dotted via `strokeLineDash`, arrow V-heads,
+  lazy image cache, crisp frames. **Replaces `drawingTools.js` (deleted).**
+- `store/slices/viewportSlice.js` **(new)** — camera state (zoom/offset).
+- `store/slices/boardSlice.js` — `selectedIds`, `updateElements` (batch, no
+  auto-snapshot), `removeElements`, `beginHistory` (capped 100), selection
+  actions; gestures checkpoint once via `beginHistory()`.
+- `store/slices/toolSlice.js` — Excalidraw tool/style fields (fill, stroke
+  style/width, roughness, opacity, font, align) + setters.
+- `hooks/useCanvas.js` **rewritten** — world-coordinate pointer pipeline,
+  two-layer redraw (base = committed, overlay = live preview), freedraw grows
+  one element (throttled 50 ms live emit, same id → remote upsert), shapes
+  preview-then-commit, **eraser hit-tests + removes elements** (synced via new
+  `delete-elements` socket event), inline text editor anchored in world coords.
+- `components/Board/Canvas.jsx` **rewritten** — two stacked `<canvas>` layers,
+  DPR-aware sizing + `ResizeObserver`, tool cursors, text editor positioned
+  through the viewport transform.
+- `components/Board/Toolbar.jsx` — tool ids → new model
+  (`freedraw/line/rectangle/ellipse/text/eraser`); size slider drives
+  brush + shape stroke width.
+- `Backend/src/server.js` — additive **`delete-elements`** relay: prunes room
+  state by id + broadcasts to the room (old clients ignore it).
+- `hooks/useSocket.js` — `delete-elements` listener + `emitDeleteElements`.
+
+**Landmine found & fixed (text tool):** trusted-mousedown default focus
+handling in Chrome can run **after** React mounts the inline text input →
+yanks focus → `onBlur` → empty `commitText()` → editor vanished untyped
+(reproduced headed + headless; synthetic JS mousedown did NOT trigger it).
+Fix: `preventDefault()` on container mousedown (Excalidraw does the same),
+with a guard so clicks inside the editor input itself still work.
+
+**Verified:** `vite build` clean · puppeteer smoke **8/8** (two canvases,
+freedraw, rect, ellipse, text commit, eraser removes, undo restores, zero
+console errors) · headed-Chrome text check PASS · socket protocol test
+**6/6** (room create/join, draw relay, delete-elements relay, room-state
+pruning). Dev servers: backend :5000, vite :5173.
+
+**Next:** Phase 2 — viewport interactions (wheel zoom at cursor, space/middle
+drag pan, hand tool, zoom controls, fit-to-content).
+
 ### 2026-11-16 — **🔥 Fixed: "Start a session" frozen on "starting…" (production)**
 
 **Symptom (user's screenshot):** clicking "Start a session" on
@@ -285,7 +343,7 @@ refreshed).
 
 ---
 
-**Last updated:** 2026-11-16
+**Last updated:** 2026-11-17
 **Project:** CoLab collaborative drawing board
 **From:** empty repo → React + Socket.io real-time drawing prototype
 **To:** (planned) full collaborative whiteboard with chat, rooms, persistence, auth

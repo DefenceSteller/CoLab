@@ -1,71 +1,173 @@
 import { useRef, useEffect, useState } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { addElement, setDrawing } from '../store/slices/boardSlice';
-import { drawElement, redrawCanvas } from '../utils/drawingTools';
+import { useSelector, useDispatch, useStore } from 'react-redux';
+import {
+  addElement,
+  updateElements,
+  removeElements,
+  beginHistory,
+  setDrawing,
+} from '../store/slices/boardSlice';
+import {
+  createElement,
+  normalizeBounds,
+  elementAtPoint,
+} from '../utils/elementModel';
+import { eventToWorld } from '../utils/viewport';
+import { redrawScene, redrawOverlay, onImageLoaded } from '../utils/renderer';
 
-const SHAPE_TOOLS = ['line', 'rectangle', 'circle'];
-const ERASER_COLOR = '#ffffff';
+// Drag-preview tools → one element committed on pointerup.
+const SHAPE_TOOLS = new Set(['rectangle', 'ellipse', 'diamond', 'line', 'arrow']);
+// Progressive tools: points accumulate during the gesture.
+const FREEHAND = 'freedraw';
+// Phase 3/2/4 tools — recognized but inert until their phase lands.
+const INERT_TOOLS = new Set(['selection', 'hand', 'laser', 'frame', 'image']);
+
+// Old toolbar ids → new model ids (defensive; toolbar now emits new ids).
+const canonicalTool = (t) =>
+  t === 'pencil' ? 'freedraw' : t === 'circle' ? 'ellipse' : t;
+
+const EMIT_INTERVAL_MS = 50; // throttle live stroke chunks
+const MIN_POINT_DIST = 1.2; // screen px between freedraw points
 
 let textIdCounter = 0;
 
-export const useCanvas = ({ emitDraw } = {}) => {
-  const canvasRef = useRef(null);
+export const useCanvas = ({ emitDraw, emitCursorMove, emitDelete } = {}) => {
+  const containerRef = useRef(null);
+  const baseRef = useRef(null); // committed layer
+  const overlayRef = useRef(null); // preview / interaction layer
+  const dprRef = useRef(1);
   const isDrawingRef = useRef(false);
-  const lastPosRef = useRef({ x: 0, y: 0 });
-  // Shape currently being dragged (preview only — committed once on mouseup)
+  const gestureRef = useRef(null); // active gesture bookkeeping
   const previewRef = useRef(null);
-  // Mirror of the textInput state so blur/mousedown handlers always see the
-  // latest value without stale closures.
   const textInputRef = useRef(null);
 
-  const { activeTool, color, brushSize } = useSelector((state) => state.tool);
-  const elements = useSelector((state) => state.board.elements);
+  const toolState = useSelector((s) => s.tool);
+  const elements = useSelector((s) => s.board.elements);
+  const viewport = useSelector((s) => s.viewport);
+
   const elementsRef = useRef(elements);
   elementsRef.current = elements;
+  const viewportRef = useRef(viewport);
+  viewportRef.current = viewport;
+  const toolRef = useRef(toolState);
+  toolRef.current = toolState;
 
   const dispatch = useDispatch();
+  const store = useStore();
   const [textInput, setTextInput] = useState(null);
+  const [overlayTick, setOverlayTick] = useState(0);
 
-  // Eraser always paints white (the canvas surface)
-  const strokeColor = activeTool === 'eraser' ? ERASER_COLOR : color;
+  // ---------- sizing (DPR-aware) + redraws ----------
 
-  // Redraw committed elements whenever the board changes
-  // (remote strokes, undo/redo, clear) — keep a live preview on top.
+  const resize = () => {
+    const container = containerRef.current;
+    if (!container) return;
+    const dpr = window.devicePixelRatio || 1;
+    dprRef.current = dpr;
+    const w = Math.max(1, Math.round(container.clientWidth * dpr));
+    const h = Math.max(1, Math.round(container.clientHeight * dpr));
+    for (const c of [baseRef.current, overlayRef.current]) {
+      if (c && (c.width !== w || c.height !== h)) {
+        c.width = w;
+        c.height = h;
+      }
+    }
+    redrawScene(baseRef.current, elementsRef.current, viewportRef.current, dpr);
+    redrawOverlay(overlayRef.current, previewRef.current, viewportRef.current, dpr);
+  };
+
+  // Mount: size both layers + observe container resizes.
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    redrawCanvas(ctx, canvas.width, canvas.height, elements);
-    if (previewRef.current) drawElement(ctx, previewRef.current);
-  }, [elements]);
+    resize();
+    const ro = new ResizeObserver(() => resize());
+    if (containerRef.current) ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  // Committed scene → base layer.
+  useEffect(() => {
+    redrawScene(baseRef.current, elements, viewport, dprRef.current);
+  }, [elements, viewport]);
+
+  // Preview / interaction state → overlay layer.
+  useEffect(() => {
+    redrawOverlay(overlayRef.current, previewRef.current, viewport, dprRef.current);
+  }, [viewport, overlayTick]);
+
+  // Lazy-loaded images finished → repaint.
+  useEffect(
+    () =>
+      onImageLoaded(() => {
+        redrawScene(baseRef.current, elementsRef.current, viewportRef.current, dprRef.current);
+      }),
+    []
+  );
 
   // ---------- helpers ----------
 
   const posFromEvent = (e) => {
-    const canvas = canvasRef.current;
+    const canvas = overlayRef.current;
     if (!canvas) return null;
-    const rect = canvas.getBoundingClientRect();
-    const src =
-      (e.touches && e.touches[0]) ||
-      (e.changedTouches && e.changedTouches[0]) ||
-      e;
-    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+    return eventToWorld(e, canvas, viewportRef.current);
   };
 
-  const commitElement = (element) => {
-    dispatch(addElement(element));
-    if (emitDraw) emitDraw(element);
+  const bumpOverlay = () => setOverlayTick((v) => v + 1);
+
+  // Style bag shared by every gesture (captured at gesture start so
+  // mid-drag palette changes don't repaint the in-progress element).
+  const styleFor = (tool) => {
+    const t = toolRef.current;
+    const closed = tool === 'rectangle' || tool === 'ellipse' || tool === 'diamond';
+    return {
+      strokeColor: t.color,
+      backgroundColor: closed ? t.backgroundColor : 'transparent',
+      fillStyle: t.fillStyle,
+      strokeStyle: t.strokeStyle,
+      strokeWidth: t.brushSize,
+      roughness: t.roughness,
+      opacity: t.opacity,
+      userId: 'local',
+    };
   };
 
-  const isDegenerate = (el) => {
-    const dx = Math.abs(el.to.x - el.from.x);
-    const dy = Math.abs(el.to.y - el.from.y);
-    if (el.type === 'line') return dx < 2 && dy < 2;
-    // rect / circle need some size in both axes
-    return dx < 2 || dy < 2;
+  // Drag box with correct origin for negative drags; line/arrow get
+  // rebased points so points[] always stays relative to x/y.
+  const shapeFromDrag = (type, start, cur, style) => {
+    const dx = cur.x - start.x;
+    const dy = cur.y - start.y;
+    const nx = Math.min(0, dx);
+    const ny = Math.min(0, dy);
+    const el = createElement(type, {
+      x: start.x + nx,
+      y: start.y + ny,
+      width: Math.abs(dx),
+      height: Math.abs(dy),
+      ...style,
+    });
+    if (type === 'line' || type === 'arrow') {
+      el.points = [[-nx, -ny], [dx - nx, dy - ny]];
+    }
+    return el;
   };
 
-  // ---------- inline text input (no browser prompt() dialog) ----------
+  const emitElement = (el) => {
+    if (!emitDraw) return;
+    // deep-ish copy: redux state is frozen in dev; socket serializes anyway
+    emitDraw(el.points ? { ...el, points: el.points.map((p) => [...p]) } : { ...el });
+  };
+
+  const eraseAt = (world) => {
+    const g = gestureRef.current;
+    if (!g) return;
+    const tol = 8 / viewportRef.current.zoom; // constant screen feel
+    const hit = elementAtPoint(elementsRef.current, world.x, world.y, tol);
+    if (!hit || g.erased.has(hit.id)) return;
+    g.erased.add(hit.id);
+    dispatch(removeElements([hit.id]));
+    if (emitDelete) emitDelete([hit.id]);
+  };
+
+  // ---------- inline text input ----------
 
   const setTextState = (next) => {
     textInputRef.current = next;
@@ -78,21 +180,23 @@ export const useCanvas = ({ emitDraw } = {}) => {
     setTextState(null);
     if (!current.value.trim()) return;
 
-    const element = {
-      type: 'text',
+    const t = toolRef.current;
+    const el = createElement('text', {
       x: current.x,
       y: current.y,
       text: current.value,
-      color,
-      fontSize: Math.max(14, brushSize * 5),
+      fontSize: t.fontSize,
+      fontFamily: t.fontFamily,
+      textAlign: t.textAlign,
+      strokeColor: t.color,
+      opacity: t.opacity,
       userId: 'local',
-    };
-    commitElement(element);
+    });
+    dispatch(addElement(el));
+    emitElement(el);
   };
 
-  const cancelText = () => {
-    setTextState(null);
-  };
+  const cancelText = () => setTextState(null);
 
   const onTextChange = (value) => {
     const current = textInputRef.current;
@@ -100,121 +204,165 @@ export const useCanvas = ({ emitDraw } = {}) => {
     setTextState({ ...current, value });
   };
 
-  // Only commit on blur if this is still the active input (the input may
-  // have been superseded by a newer one created in startDrawing).
+  // Only commit on blur if this is still the active input (it may have
+  // been superseded by a newer one created in startDrawing).
   const handleTextBlur = (inputId) => {
     const current = textInputRef.current;
     if (!current || current.id !== inputId) return;
     commitText();
   };
 
-  // ---------- drawing handlers ----------
+  // ---------- gesture handlers ----------
 
   const startDrawing = (e) => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const pos = posFromEvent(e);
-    if (!pos) return;
+    if (!overlayRef.current) return;
+    if (e.button != null && e.button !== 0) return; // left button / touch only
+    // The inline text editor is a child of the container — clicks inside
+    // it must reach the input untouched (caret placement, selection).
+    if (e.target && e.target.closest && e.target.closest('input')) return;
+    // Cancel Chrome's default mousedown focus handling: it can run AFTER
+    // React mounts the text editor (trusted-input focus fixup) and yank
+    // focus out of the fresh input → editor closes untyped (Excalidraw
+    // prevents default on canvas mousedown for the same reason).
+    e.preventDefault();
+    const world = posFromEvent(e);
+    if (!world) return;
 
     // A pending text gets placed before any new interaction
     if (textInputRef.current) commitText();
 
-    // Text tool: open the inline editor at the click position
-    if (activeTool === 'text') {
+    const tool = canonicalTool(toolRef.current.activeTool);
+    if (INERT_TOOLS.has(tool)) return;
+
+    if (tool === 'text') {
       textIdCounter += 1;
-      setTextState({ id: textIdCounter, x: pos.x, y: pos.y, value: '' });
+      setTextState({ id: textIdCounter, x: world.x, y: world.y, value: '' });
       return;
     }
 
     isDrawingRef.current = true;
-    lastPosRef.current = pos;
-    previewRef.current = null;
     dispatch(setDrawing(true));
+    const style = styleFor(tool);
+
+    if (tool === 'eraser') {
+      gestureRef.current = { tool, erased: new Set() };
+      dispatch(beginHistory()); // one checkpoint for the whole erase pass
+      eraseAt(world);
+      return;
+    }
+
+    if (tool === FREEHAND) {
+      const el = createElement('freedraw', {
+        x: world.x,
+        y: world.y,
+        points: [[0, 0]],
+        ...style,
+      });
+      gestureRef.current = { tool, id: el.id, lastEmit: 0 };
+      dispatch(addElement(el)); // snapshots (new id)
+      emitElement(el);
+      return;
+    }
+
+    if (SHAPE_TOOLS.has(tool)) {
+      gestureRef.current = { tool, start: world, style };
+      previewRef.current = shapeFromDrag(tool, world, world, style);
+      bumpOverlay();
+    }
   };
 
   const draw = (e) => {
     if (!isDrawingRef.current) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const pos = posFromEvent(e);
-    if (!pos) return;
+    const g = gestureRef.current;
+    if (!g) return;
+    const world = posFromEvent(e);
+    if (!world) return;
 
-    const ctx = canvas.getContext('2d');
+    // Cursor broadcast in WORLD coords (viewport-independent; rendered
+    // per-client with its own camera — see Phase 9 for the relay).
+    if (emitCursorMove) emitCursorMove({ x: world.x, y: world.y });
 
-    // Shape tools: render a live preview from start → current position.
-    // Nothing is committed until the mouse is released.
-    if (SHAPE_TOOLS.includes(activeTool)) {
-      const preview = {
-        type: activeTool,
-        from: lastPosRef.current,
-        to: pos,
-        color,
-        size: brushSize,
-      };
-      previewRef.current = preview;
-      redrawCanvas(ctx, canvas.width, canvas.height, elementsRef.current);
-      drawElement(ctx, preview);
+    if (g.tool === 'eraser') {
+      eraseAt(world);
       return;
     }
 
-    // Pencil + eraser: each move is one small segment, committed immediately
-    // (locally to Redux and over the socket) so strokes survive redraws.
-    const segment = {
-      type: activeTool,
-      from: lastPosRef.current,
-      to: pos,
-      color: strokeColor,
-      size: brushSize,
-      userId: 'local',
-    };
-    drawElement(ctx, segment);
-    commitElement(segment);
-    lastPosRef.current = pos;
+    if (g.tool === FREEHAND) {
+      const zoom = viewportRef.current.zoom;
+      dispatch(
+        updateElements({
+          ids: [g.id],
+          changes: (el) => {
+            const px = world.x - el.x;
+            const py = world.y - el.y;
+            const last = el.points[el.points.length - 1];
+            if (last && Math.hypot(px - last[0], py - last[1]) < MIN_POINT_DIST / zoom) return;
+            el.points.push([px, py]);
+            normalizeBounds(el);
+            el.version = (el.version || 1) + 1;
+          },
+        })
+      );
+      // Throttled live emit so collaborators watch the stroke grow.
+      const now = performance.now();
+      if (now - g.lastEmit >= EMIT_INTERVAL_MS) {
+        g.lastEmit = now;
+        const el = store.getState().board.elements.find((x) => x.id === g.id);
+        if (el) emitElement(el);
+      }
+      return;
+    }
+
+    if (SHAPE_TOOLS.has(g.tool)) {
+      previewRef.current = shapeFromDrag(g.tool, g.start, world, g.style);
+      bumpOverlay();
+    }
   };
 
   const stopDrawing = (e) => {
     if (!isDrawingRef.current) return;
     isDrawingRef.current = false;
     dispatch(setDrawing(false));
+    const g = gestureRef.current;
+    gestureRef.current = null;
+    if (!g) return;
 
-    if (SHAPE_TOOLS.includes(activeTool)) {
-      const preview = previewRef.current;
-      previewRef.current = null;
-      const canvas = canvasRef.current;
-      if (!preview || !canvas) return;
+    if (g.tool === 'eraser') return; // removals already applied
 
-      // Snap the final point to the release position
-      if (e) {
-        const pos = posFromEvent(e);
-        if (pos) preview.to = pos;
-      }
-
-      if (isDegenerate(preview)) {
-        // Click without a real drag — just erase the preview
-        const ctx = canvas.getContext('2d');
-        redrawCanvas(ctx, canvas.width, canvas.height, elementsRef.current);
-      } else {
-        // THE fix: one shape, one element, committed once.
-        commitElement(preview);
-      }
+    if (g.tool === FREEHAND) {
+      // Final full-state emit (last points may be unthrottled).
+      const el = store.getState().board.elements.find((x) => x.id === g.id);
+      if (el) emitElement(el);
       return;
     }
 
-    // Pencil/eraser segments are already committed — just reset the path.
-    const canvas = canvasRef.current;
-    if (canvas) canvas.getContext('2d').beginPath();
+    if (SHAPE_TOOLS.has(g.tool)) {
+      const world = e ? posFromEvent(e) : null;
+      const cur = world || g.start;
+      const el = shapeFromDrag(g.tool, g.start, cur, g.style);
+      previewRef.current = null;
+      bumpOverlay();
+
+      const dx = Math.abs(cur.x - g.start.x);
+      const dy = Math.abs(cur.y - g.start.y);
+      const open = g.tool === 'line' || g.tool === 'arrow';
+      const degenerate = open ? dx < 2 && dy < 2 : dx < 2 || dy < 2;
+      if (degenerate) return; // click without drag → discard
+
+      dispatch(addElement(el)); // snapshots
+      emitElement(el);
+    }
   };
 
   // ---------- event listeners (re-registered each render for fresh closures) ----------
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!container) return;
 
     const onMouseDown = (e) => startDrawing(e);
     const onMouseMove = (e) => draw(e);
-    const onMouseUp = (e) => stopDrawing(e);
-    const onMouseOut = (e) => stopDrawing(e);
+    const onMouseUp = (e) => stopDrawing(e); // window: release outside still ends it
 
     const onTouchStart = (e) => {
       e.preventDefault();
@@ -229,24 +377,33 @@ export const useCanvas = ({ emitDraw } = {}) => {
       stopDrawing(e);
     };
 
-    canvas.addEventListener('mousedown', onMouseDown);
-    canvas.addEventListener('mousemove', onMouseMove);
-    canvas.addEventListener('mouseup', onMouseUp);
-    canvas.addEventListener('mouseout', onMouseOut);
-    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
-    canvas.addEventListener('touchmove', onTouchMove, { passive: false });
-    canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+    container.addEventListener('mousedown', onMouseDown);
+    container.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+    container.addEventListener('touchstart', onTouchStart, { passive: false });
+    container.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('touchcancel', onTouchEnd);
 
     return () => {
-      canvas.removeEventListener('mousedown', onMouseDown);
-      canvas.removeEventListener('mousemove', onMouseMove);
-      canvas.removeEventListener('mouseup', onMouseUp);
-      canvas.removeEventListener('mouseout', onMouseOut);
-      canvas.removeEventListener('touchstart', onTouchStart);
-      canvas.removeEventListener('touchmove', onTouchMove);
-      canvas.removeEventListener('touchend', onTouchEnd);
+      container.removeEventListener('mousedown', onMouseDown);
+      container.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+      container.removeEventListener('touchstart', onTouchStart);
+      container.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
     };
   });
 
-  return { canvasRef, textInput, onTextChange, commitText, cancelText, handleTextBlur };
+  return {
+    containerRef,
+    baseRef,
+    overlayRef,
+    textInput,
+    onTextChange,
+    commitText,
+    cancelText,
+    handleTextBlur,
+  };
 };

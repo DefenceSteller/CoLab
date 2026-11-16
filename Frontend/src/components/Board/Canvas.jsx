@@ -1,60 +1,57 @@
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
 import { useSelector } from 'react-redux';
 import { useCanvas } from '../../hooks/useCanvas';
 import { useSocket } from '../../hooks/useSocket';
-import { redrawCanvas } from '../../utils/drawingTools';
+import { screenFromWorld } from '../../utils/viewport';
+
+const CURSOR = {
+  text: 'text',
+  hand: 'grab',
+  selection: 'default',
+  eraser: 'cell',
+  laser: 'crosshair',
+};
 
 const Canvas = () => {
-  const { emitDraw, emitCursorMove } = useSocket();
+  const { emitDraw, emitCursorMove, emitDeleteElements } = useSocket();
   const {
-    canvasRef,
+    containerRef,
+    baseRef,
+    overlayRef,
     textInput,
     onTextChange,
     commitText,
     cancelText,
     handleTextBlur,
-  } = useCanvas({ emitDraw, emitCursorMove });
+  } = useCanvas({ emitDraw, emitCursorMove, emitDelete: emitDeleteElements });
 
   const activeTool = useSelector((state) => state.tool.activeTool);
-  const brushSize = useSelector((state) => state.tool.brushSize);
   const color = useSelector((state) => state.tool.color);
+  const fontSize = useSelector((state) => state.tool.fontSize);
+  const viewport = useSelector((state) => state.viewport);
 
-  // Latest elements for redraw-on-resize without re-registering the listener
-  const elements = useSelector((state) => state.board.elements);
-  const elementsRef = useRef(elements);
-  elementsRef.current = elements;
-
-  useEffect(() => {
-    const handleResize = () => {
-      const canvas = canvasRef.current;
-      if (!canvas || !canvas.parentElement) return;
-
-      canvas.width = canvas.parentElement.clientWidth;
-      canvas.height = canvas.parentElement.clientHeight;
-
-      // Re-render strokes so a window resize doesn't wipe the board
-      const ctx = canvas.getContext('2d');
-      redrawCanvas(ctx, canvas.width, canvas.height, elementsRef.current);
-    };
-
-    handleResize();
-    window.addEventListener('resize', handleResize);
-
-    return () => window.removeEventListener('resize', handleResize);
-  }, [canvasRef]);
-
-  const textFontSize = Math.max(14, brushSize * 5);
+  // Text editor lives at a WORLD position — project it to screen on
+  // every render so pans/zooms keep it glued to its anchor.
+  const anchor = textInput ? screenFromWorld(textInput.x, textInput.y, viewport) : null;
+  const editorFontSize = Math.max(10, fontSize * viewport.zoom);
 
   return (
-    <div className="relative w-full h-full bg-white border-2 border-ink rounded-xl overflow-hidden shadow-[6px_6px_0_#101014]">
+    <div
+      ref={containerRef}
+      className="relative w-full h-full bg-white border-2 border-ink rounded-xl overflow-hidden shadow-[6px_6px_0_#101014]"
+      style={{ cursor: CURSOR[activeTool] || 'crosshair' }}
+    >
+      {/* base layer: committed elements */}
+      <canvas ref={baseRef} className="absolute inset-0 w-full h-full block" />
+      {/* overlay layer: in-progress preview / interaction */}
       <canvas
-        ref={canvasRef}
-        className="w-full h-full block"
-        style={{ cursor: activeTool === 'text' ? 'text' : 'crosshair' }}
+        ref={overlayRef}
+        className="absolute inset-0 w-full h-full block"
+        style={{ pointerEvents: 'none' }}
       />
 
-      {/* Inline text editor — sits directly on the canvas, no prompt() dialog */}
-      {textInput && (
+      {/* Inline text editor — sits on the canvas, no prompt() dialog */}
+      {textInput && anchor && (
         <input
           key={textInput.id}
           autoFocus
@@ -73,10 +70,10 @@ const Canvas = () => {
           placeholder="Type…  Enter to place"
           className="absolute z-10 px-1.5 py-0.5 bg-white/90 outline-none border-2 border-ink rounded-md shadow-[3px_3px_0_#101014] font-semibold placeholder:text-gray-400 placeholder:font-normal"
           style={{
-            left: textInput.x,
-            top: Math.max(0, textInput.y - 4),
+            left: anchor.x,
+            top: Math.max(0, anchor.y - 4),
             color,
-            fontSize: `${textFontSize}px`,
+            fontSize: `${editorFontSize}px`,
             minWidth: '10rem',
             width: `${Math.max(12, textInput.value.length + 4)}ch`,
           }}

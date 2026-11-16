@@ -1,16 +1,19 @@
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
-import { setTool, setColor, setBrushSize } from '../../store/slices/toolSlice';
+import {
+  setTool, setColor, setBrushSize, setStrokeWidth,
+} from '../../store/slices/toolSlice';
 import {
   Pencil, Square, Circle, Type, Eraser, Minus,
   Palette, Undo2, Redo2, Trash2,
 } from 'lucide-react';
 
+// Excalidraw-parity tool ids (see utils/elementModel.js ELEMENT_TYPES)
 const TOOLS = [
-  { id: 'pencil', label: 'Pencil', icon: <Pencil size={16} /> },
+  { id: 'freedraw', label: 'Draw', icon: <Pencil size={16} /> },
   { id: 'line', label: 'Line', icon: <Minus size={16} /> },
   { id: 'rectangle', label: 'Rect', icon: <Square size={16} /> },
-  { id: 'circle', label: 'Circle', icon: <Circle size={16} /> },
+  { id: 'ellipse', label: 'Ellipse', icon: <Circle size={16} /> },
   { id: 'text', label: 'Text', icon: <Type size={16} /> },
   { id: 'eraser', label: 'Eraser', icon: <Eraser size={16} /> },
 ];
@@ -75,16 +78,21 @@ const Toolbar = ({ onUndo, onRedo, onClear }) => {
 
       <Divider />
 
-      {/* Brush size */}
+      {/* Stroke size — drives freedraw width AND shape stroke width
+          (replaced by Excalidraw's thin/medium/bold control in Phase 5) */}
       <div className="flex items-center gap-2.5 shrink-0 min-w-[10rem]">
         <input
           type="range"
           min="1"
           max="50"
           value={brushSize}
-          onChange={(e) => dispatch(setBrushSize(parseInt(e.target.value, 10)))}
+          onChange={(e) => {
+            const v = parseInt(e.target.value, 10);
+            dispatch(setBrushSize(v));
+            dispatch(setStrokeWidth(v));
+          }}
           className="size-slider w-24"
-          aria-label="Brush size"
+          aria-label="Stroke size"
         />
         <span className="text-xs font-bold w-9 tabular-nums">{brushSize}px</span>
       </div>

@@ -1,9 +1,11 @@
 import { createSlice } from '@reduxjs/toolkit';
+import { normalizeElement, normalizeScene } from '../../utils/elementModel';
 
 const initialState = {
   elements: [],
-  history: [],
+  history: [],   // snapshots of `elements` (arrays) for undo
   future: [],
+  selectedIds: [], // Excalidraw-style multi-selection
   isDrawing: false,
   collaborators: {},
   chatMessages: [],
@@ -11,33 +13,106 @@ const initialState = {
   roomUsers: [],
 };
 
+// Snapshot BEFORE a mutation so undo restores the pre-mutation state.
+// Capped so a long session can't grow memory forever.
+const MAX_HISTORY = 100;
+const snapshot = (state) => {
+  state.history.push(state.elements.map((el) => ({ ...el })));
+  if (state.history.length > MAX_HISTORY) state.history.shift();
+  state.future = [];
+};
+
+const byId = (state, id) => state.elements.find((el) => el.id === id);
+
 const boardSlice = createSlice({
   name: 'board',
   initialState,
   reducers: {
+    // Add a NEW element (local draw or remote stroke).
     addElement: (state, action) => {
-      // Snapshot BEFORE pushing, so undo actually removes the new element
-      state.history.push([...state.elements]);
-      state.elements.push(action.payload);
-      state.future = [];
+      const el = normalizeElement(action.payload);
+      if (!el) return;
+      // Same id already present → treat as an update (live stroke chunks)
+      const existing = byId(state, el.id);
+      if (existing) {
+        Object.assign(existing, el);
+        return;
+      }
+      snapshot(state);
+      state.elements.push(el);
     },
+
+    // Batch-update existing elements by id. `changes` is a plain object
+    // or a function(draftEl) for computed updates (move/resize).
+    // Does NOT snapshot — callers dispatch beginHistory() once per gesture.
+    updateElements: (state, action) => {
+      const { ids, changes } = action.payload;
+      const idSet = new Set(ids);
+      for (const el of state.elements) {
+        if (!idSet.has(el.id)) continue;
+        if (typeof changes === 'function') changes(el);
+        else Object.assign(el, changes);
+        el.version = (el.version || 1) + 1;
+      }
+    },
+
+    // Remove elements by id (local delete/eraser or remote delete).
+    // Does NOT snapshot — callers dispatch beginHistory() first.
+    removeElements: (state, action) => {
+      const idSet = new Set(action.payload);
+      state.elements = state.elements.filter((el) => !idSet.has(el.id));
+      state.selectedIds = state.selectedIds.filter((id) => !idSet.has(id));
+    },
+
+    // Explicit history checkpoint (start of a move/resize/style gesture).
+    beginHistory: (state) => {
+      snapshot(state);
+    },
+
+    // Replace the whole scene (used when joining a room that already has content)
+    loadBoard: (state, action) => {
+      state.elements = normalizeScene(action.payload);
+      state.history = [];
+      state.future = [];
+      state.selectedIds = [];
+    },
+
     clearBoard: (state) => {
       state.elements = [];
       state.history = [];
       state.future = [];
+      state.selectedIds = [];
     },
+
     undo: (state) => {
       if (state.history.length > 0) {
-        state.future.push([...state.elements]);
+        state.future.push(state.elements.map((el) => ({ ...el })));
         state.elements = state.history.pop();
+        state.selectedIds = [];
       }
     },
     redo: (state) => {
       if (state.future.length > 0) {
-        state.history.push([...state.elements]);
+        state.history.push(state.elements.map((el) => ({ ...el })));
         state.elements = state.future.pop();
+        state.selectedIds = [];
       }
     },
+
+    // ---------- selection ----------
+    setSelection: (state, action) => {
+      state.selectedIds = action.payload || [];
+    },
+    toggleSelected: (state, action) => {
+      const id = action.payload;
+      const i = state.selectedIds.indexOf(id);
+      if (i >= 0) state.selectedIds.splice(i, 1);
+      else state.selectedIds.push(id);
+    },
+    clearSelection: (state) => {
+      state.selectedIds = [];
+    },
+
     updateCollaborator: (state, action) => {
       state.collaborators[action.payload.id] = {
         ...state.collaborators[action.payload.id],
@@ -59,27 +134,27 @@ const boardSlice = createSlice({
     setRoomUsers: (state, action) => {
       state.roomUsers = action.payload;
     },
-    // Replace the whole board (used when joining a room that already has content)
-    loadBoard: (state, action) => {
-      state.elements = action.payload || [];
-      state.history = [];
-      state.future = [];
-    },
   },
 });
 
 export const {
   addElement,
+  updateElements,
+  removeElements,
+  beginHistory,
+  loadBoard,
   clearBoard,
   undo,
   redo,
+  setSelection,
+  toggleSelected,
+  clearSelection,
   updateCollaborator,
   removeCollaborator,
   addChatMessage,
   setDrawing,
   setRoomId,
   setRoomUsers,
-  loadBoard,
 } = boardSlice.actions;
 
 export default boardSlice.reducer;

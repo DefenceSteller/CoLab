@@ -117,6 +117,18 @@ io.on('connection', (socket) => {
         socket.to(roomId).emit('draw', data); // everyone in the room except sender
     });
 
+    // ---- eraser: remove by id — prune room state + relay to the room ----
+    // (additive event: old clients simply don't listen for it)
+    socket.on('delete-elements', (ids) => {
+        const roomId = socket.data.roomId;
+        if (!roomId || !Array.isArray(ids) || ids.length === 0) return;
+        const room = rooms.get(roomId);
+        if (!room) return;
+        const idSet = new Set(ids);
+        room.elements = room.elements.filter((el) => el && !idSet.has(el.id));
+        socket.to(roomId).emit('delete-elements', ids);
+    });
+
     // ---- clear: relayed to the whole room + wipes stored state ----
     socket.on('clear-board', () => {
         const roomId = socket.data.roomId;
