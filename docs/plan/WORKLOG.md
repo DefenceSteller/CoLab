@@ -79,6 +79,47 @@
 
 ## 🛠️ Session notes
 
+### 2026-11-16 — **🔥 Fixed: "Start a session" frozen on "starting…" (production)**
+
+**Symptom (user's screenshot):** clicking "Start a session" on
+https://colab-gold.vercel.app spun on "starting…" forever — no share popup, no
+error banner.
+
+**Root cause (found by probing the LIVE backend with the app's exact emit
+path):** an ack-signature mismatch between server and client.
+
+- Server acks Node-style: `cb(null, { ok:true, roomId, … })` (`server.js` L82).
+- Client emits with `.timeout(8000)`, which makes socket.io-client flag the
+  callback `withError` and **prepend its own error slot** on arrival
+  (`socket.js` L601: `packet.data.unshift(null)`).
+- So the callback actually received `(null, null, {ok:true,…})`: `err`=null,
+  `res`=**null** (the *server's* null), real payload dropped.
+- `resolve(null)` → `res.ok` threw `TypeError` inside the async handler →
+  `setStatus('idle')` / `setError()` never ran → button frozen on
+  "starting…", no banner. Verified: `ACK ARGS: [null,null,{…}]`.
+
+Earlier protocol tests passed only because they emitted **without**
+`.timeout()` — the bug lived solely in the app's code path.
+
+**Fix (frontend only, no backend change):**
+- `useSocket.js` — new `parseAck(err, …args)` helper: takes the **first object
+  argument** (correct with/without `.timeout()`, both server ack styles);
+  `createRoom`/`joinRoom` now use it; reconnect-rejoin guard null-checked.
+- `App.jsx` — `handleStart` wrapped in `try/catch/finally` so the button
+  **always** leaves "starting…"; shared-link join path got the same
+  null-guards + `.catch`/`.finally` (it had the identical latent bug).
+
+**Verified:** 8/8 checks against the live Railway backend through the exact
+fixed path (create → join → `not-found` rejection → draw relay); production
+bundle `index-CJhAqtHD.js` confirmed to contain the fix + Railway URL;
+`colab-gold.vercel.app` aliased to the new deployment `colab-ad0pvclcq`.
+
+**Also during this hunt:** reverted bad commit `41acddd` ("live server" — added
+a stray test file that broke Vercel auto-builds) as `9860295`; restored
+`VITE_SOCKET_URL` in Vercel; noted `colab` project's direct deployment URLs are
+behind **Deployment Protection** (Vercel login page) — always verify via
+`colab-gold.vercel.app`.
+
 ### 2026-11-16 — **Rooms / Sessions feature built & protocol-verified**
 
 **User's exact ask:** "start session" button → link popup → share link → user 2
@@ -235,7 +276,7 @@ refreshed).
 
 ---
 
-**Last updated:** 2026-11-12
+**Last updated:** 2026-11-16
 **Project:** CoLab collaborative drawing board
 **From:** empty repo → React + Socket.io real-time drawing prototype
 **To:** (planned) full collaborative whiteboard with chat, rooms, persistence, auth

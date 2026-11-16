@@ -56,7 +56,7 @@ export const useSocketListeners = () => {
       if (roomId) {
         const { username } = store.getState().user;
         joinRoom(roomId, username).then((res) => {
-          if (res.ok) dispatch(loadBoard(res.elements));
+          if (res && res.ok) dispatch(loadBoard(res.elements));
         });
       }
     };
@@ -108,13 +108,37 @@ export const useSocketListeners = () => {
   }, [dispatch]);
 };
 
+/**
+ * Parse an ack callback from the server.
+ *
+ * The server acks Node-style: `cb(null, payload)`. But when we emit WITH
+ * `.timeout()`, socket.io-client flags the callback `withError` and PREPENDS
+ * its own error slot when the ack arrives (`packet.data.unshift(null)`), so
+ * the client callback actually receives `(null, null, payload)`.
+ *
+ * The old code read position 1 → got the SERVER's `null` → `res.ok` threw →
+ * "Start a session" froze on "starting…" with no error banner (2026-11-16).
+ *
+ * Fix: take the first OBJECT argument. Correct with or without `.timeout()`,
+ * and for both `cb(payload)` and `cb(null, payload)` server styles.
+ */
+const parseAck = (err, ...args) => {
+  if (err) return { ok: false, error: 'timeout' };
+  return (
+    args.find((a) => a && typeof a === 'object') || {
+      ok: false,
+      error: 'bad-response',
+    }
+  );
+};
+
 /** Create a new session (room) → resolves { ok, roomId, elements, maxUsers }. */
 const createRoom = (username) =>
   new Promise((resolve) => {
     getSocket()
       .timeout(8000)
-      .emit('create-room', { username }, (err, res) =>
-        resolve(err ? { ok: false, error: 'timeout' } : res)
+      .emit('create-room', { username }, (err, ...args) =>
+        resolve(parseAck(err, ...args))
       );
   });
 
@@ -123,8 +147,8 @@ const joinRoom = (roomId, username) =>
   new Promise((resolve) => {
     getSocket()
       .timeout(8000)
-      .emit('join-room', { roomId, username }, (err, res) =>
-        resolve(err ? { ok: false, error: 'timeout' } : res)
+      .emit('join-room', { roomId, username }, (err, ...args) =>
+        resolve(parseAck(err, ...args))
       );
   });
 

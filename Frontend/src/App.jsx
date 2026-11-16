@@ -49,23 +49,32 @@ function Session() {
 
     let cancelled = false;
     setStatus('joining');
-    joinRoom(roomId, username).then((res) => {
-      if (cancelled) return; // StrictMode double-mount: let the 2nd run win
-      if (res.ok) {
-        dispatch(setRoomId(res.roomId));
-        dispatch(loadBoard(res.elements)); // replay strokes already on the board
-        setView('board');
-        setError(null);
-      } else {
-        setUrlRoom(null); // drop the dead link from the address bar
-        setError(
-          res.error === 'full'
-            ? 'That session is full — 5/5 people are already drawing.'
-            : "That session link isn't active anymore — ask for a fresh one."
-        );
-      }
-      setStatus('idle');
-    });
+    joinRoom(roomId, username)
+      .then((res) => {
+        if (cancelled) return; // StrictMode double-mount: let the 2nd run win
+        if (res && res.ok) {
+          dispatch(setRoomId(res.roomId));
+          dispatch(loadBoard(res.elements)); // replay strokes already on the board
+          setView('board');
+          setError(null);
+        } else {
+          setUrlRoom(null); // drop the dead link from the address bar
+          setError(
+            res && res.error === 'full'
+              ? 'That session is full — 5/5 people are already drawing.'
+              : "That session link isn't active anymore — ask for a fresh one."
+          );
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setUrlRoom(null);
+          setError("That session link isn't active anymore — ask for a fresh one.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setStatus('idle');
+      });
 
     return () => {
       cancelled = true;
@@ -74,20 +83,27 @@ function Session() {
   }, []);
 
   // "Start a session" → create room → show board + share-link popup
+  // finally{} guarantees the button always leaves "starting…", even if the
+  // ack payload is malformed or dispatch throws (never freeze the button).
   const handleStart = async () => {
     setStatus('creating');
     setError(null);
-    const res = await createRoom(username);
-    if (res.ok) {
-      dispatch(setRoomId(res.roomId));
-      dispatch(loadBoard(res.elements));
-      setUrlRoom(res.roomId); // URL becomes shareable: /?room=ABC123
-      setView('board');
-      setShowShare(true); // ← the link popup the user asked for
-    } else {
+    try {
+      const res = await createRoom(username);
+      if (res && res.ok) {
+        dispatch(setRoomId(res.roomId));
+        dispatch(loadBoard(res.elements));
+        setUrlRoom(res.roomId); // URL becomes shareable: /?room=ABC123
+        setView('board');
+        setShowShare(true); // ← the link popup the user asked for
+      } else {
+        setError("Couldn't start a session — check your connection and try again.");
+      }
+    } catch {
       setError("Couldn't start a session — check your connection and try again.");
+    } finally {
+      setStatus('idle');
     }
-    setStatus('idle');
   };
 
   if (view === 'board') {

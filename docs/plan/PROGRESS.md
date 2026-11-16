@@ -50,6 +50,11 @@ style) — implemented, see `PHASE_7_UI_UX.md`. Next step: user review + directi
 - [x] **Rooms / sessions feature (2026-11-16)** — create/join by 6-char code,
   max 5 users per link, stroke replay for late joiners, room-scoped draw/clear/chat,
   share-link popup with copy button, rejoin-on-reconnect.
+- [x] **"Start a session" frozen on "starting…" — FIXED (2026-11-16)** —
+  ack-signature mismatch: server `cb(null, payload)` + client `.timeout()`
+  socket.io error-slot prepend → app read `null` as the response → `res.ok`
+  threw → button froze. Frontend `parseAck()` + `try/catch/finally` hardening
+  (no backend change); 8/8 live tests, deployed to `colab-gold.vercel.app`.
 - [x] **Railway push-to-deploy** — backend service connected to GitHub
   (branch `master`, root directory `Backend`); pushes rebuild it automatically
 
