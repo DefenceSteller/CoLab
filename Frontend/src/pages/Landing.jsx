@@ -72,34 +72,35 @@ const Landing = ({ onStart, onSolo, status, error }) => {
                 </div>
               )}
 
-              {/* primary CTA */}
-              <button
-                onClick={onStart}
-                disabled={creating}
-                className="mt-12 inline-flex items-center gap-2.5 bg-lime border-2 border-ink rounded-2xl px-8 py-4 text-lg font-bold shadow-[6px_6px_0_#101014] cursor-pointer transition-transform duration-100 hover:-translate-y-0.5 active:translate-x-1.5 active:translate-y-1.5 active:shadow-[0_0_0_#101014] disabled:opacity-70 disabled:cursor-wait"
-              >
-                {creating ? (
-                  <>
-                    <Loader2 size={20} className="animate-spin" />
-                    starting…
-                  </>
-                ) : (
-                  <>
-                    <ArrowRight size={20} />
-                    start a session
-                  </>
-                )}
-              </button>
-
-              <div className="mt-10 flex items-center justify-center gap-1.5 text-xs font-bold opacity-60">
-                <Users size={14} /> up to 5 people per session link
+              {/* primary CTA + capacity note — same line */}
+              <div className="mt-8 flex items-center justify-center gap-3">
+                <button
+                  onClick={onStart}
+                  disabled={creating}
+                  className="inline-flex items-center gap-2.5 bg-lime border-2 border-ink rounded-2xl px-8 py-4 text-lg font-bold shadow-[6px_6px_0_#101014] cursor-pointer transition-transform duration-100 hover:-translate-y-0.5 active:translate-x-1.5 active:translate-y-1.5 active:shadow-[0_0_0_#101014] disabled:opacity-70 disabled:cursor-wait"
+                >
+                  {creating ? (
+                    <>
+                      <Loader2 size={20} className="animate-spin" />
+                      starting…
+                    </>
+                  ) : (
+                    <>
+                      <ArrowRight size={20} />
+                      start a session
+                    </>
+                  )}
+                </button>
+                <span className="inline-flex items-center gap-1.5 text-xs font-bold opacity-60 whitespace-nowrap">
+                  <Users size={14} /> up to 5 people per session link
+                </span>
               </div>
 
               {/* solo / guest CTA */}
               <button
                 onClick={onSolo}
                 disabled={creating || joining}
-                className="mt-8 inline-flex items-center gap-2 bg-white border-2 border-ink rounded-2xl px-6 py-3 text-sm font-bold shadow-[4px_4px_0_#101014] cursor-pointer transition-transform duration-100 hover:-translate-y-0.5 active:translate-x-1.5 active:translate-y-1.5 active:shadow-[0_0_0_#101014] disabled:opacity-70 disabled:cursor-wait"
+                className="mt-4 inline-flex items-center gap-2 bg-white border-2 border-ink rounded-2xl px-6 py-3 text-sm font-bold shadow-[4px_4px_0_#101014] cursor-pointer transition-transform duration-100 hover:-translate-y-0.5 active:translate-x-1.5 active:translate-y-1.5 active:shadow-[0_0_0_#101014] disabled:opacity-70 disabled:cursor-wait"
                 title="Open a private board with no shareable link"
               >
                 <Zap size={14} />
