@@ -189,6 +189,7 @@ export const useSocket = () => {
   const emitClearBoard = () => socket.emit('clear-board');
   const emitUpdateElements = (updates) => socket.emit('update-elements', updates);
   const emitLaserPoint = (point) => socket.emit('laser-point', point);
+  const emitLeaveRoom = () => socket.emit('leave-room');
 
   return {
     socket,
@@ -199,6 +200,7 @@ export const useSocket = () => {
     emitClearBoard,
     emitUpdateElements,
     emitLaserPoint,
+    emitLeaveRoom,
     createRoom,
     joinRoom,
   };

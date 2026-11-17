@@ -33,7 +33,7 @@ const setUrlRoom = (roomId) => {
  */
 function Session() {
   const dispatch = useDispatch();
-  const { createRoom, joinRoom } = useSocket();
+  const { createRoom, joinRoom, emitLeaveRoom } = useSocket();
   const { username } = useSelector((state) => state.user);
   useSocketListeners(); // global socket listeners, attached exactly once
 
@@ -41,6 +41,14 @@ function Session() {
   const [status, setStatus] = useState('idle'); // 'idle' | 'joining' | 'creating'
   const [error, setError] = useState(null);
   const [showShare, setShowShare] = useState(false);
+
+  /** Leave current session → back to landing */
+  const handleLeave = () => {
+    emitLeaveRoom();
+    setUrlRoom(null);
+    setView('landing');
+    setShowShare(false);
+  };
 
   // Arrived via a shared link (?room=...) → auto-join that session.
   useEffect(() => {
@@ -109,7 +117,7 @@ function Session() {
   if (view === 'board') {
     return (
       <>
-        <BoardPage onShare={() => setShowShare(true)} />
+        <BoardPage onShare={() => setShowShare(true)} onLeave={handleLeave} />
         {showShare && <ShareModal onClose={() => setShowShare(false)} />}
       </>
     );

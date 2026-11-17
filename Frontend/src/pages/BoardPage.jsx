@@ -4,9 +4,9 @@ import Canvas from '../components/Board/Canvas';
 import Toolbar from '@/components/Board/Toolbar';
 import { clearBoard, undo, redo } from '../store/slices/boardSlice';
 import { useSocket } from '../hooks/useSocket';
-import { Share2, Users } from 'lucide-react';
+import { Share2, Users, LogOut } from 'lucide-react';
 
-const BoardPage = ({ onShare }) => {
+const BoardPage = ({ onShare, onLeave }) => {
   const dispatch = useDispatch();
   const { emitClearBoard } = useSocket();
   const { username, isConnected, color } = useSelector((state) => state.user);
@@ -68,6 +68,14 @@ const BoardPage = ({ onShare }) => {
           >
             <Share2 size={14} />
             Share
+          </button>
+          <button
+            onClick={onLeave}
+            className="tool-btn bg-bubble text-ink"
+            title="Leave session"
+          >
+            <LogOut size={14} />
+            Exit
           </button>
           <div className="flex items-center gap-2 bg-white border-2 border-ink rounded-full pl-1 pr-3 py-1 shadow-[3px_3px_0_#101014]">
             <div
