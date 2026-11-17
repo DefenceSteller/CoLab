@@ -2,7 +2,7 @@
 
 > Live progress tracker for CoLab — a from-scratch collaborative drawing app.
 
-## Current Phase: **Excalidraw-parity rebuild — Phase 10 (Docs, tests, deploy) — finalizing**
+## Current Phase: **Excalidraw-parity rebuild — Phase 10 (Docs, tests, deploy) — ✅ COMPLETE**
 
 **Goal (2026-11-17, user request):** match **every tool & functionality of
 excalidraw.com**. 10-phase plan (stop after each phase for review) — full
@@ -19,7 +19,7 @@ detail in `EXCALIDRAW_PARITY_PLAN.md`:
 | 7 | Shortcuts + menus — full keymap, context menu, command palette | ✅ **Done (2026-11-17)** |
 | 8 | Export/import — PNG/SVG/JSON clipboard & file | ✅ **Done (2026-11-17)** |
 | 9 | Realtime sync — `update-elements`/`selection`/`laser` events + room-state merge | ✅ **Done (2026-11-17)** |
-| 10 | Docs, tests, production deploy | 🟡 In progress (2026-11-17) — final docs, full test pass, commit + push → Vercel/Railway auto-deploy |
+| 10 | Docs, tests, production deploy | ✅ **Done (2026-11-17)** — final docs, full test pass, commit + push → Vercel/Railway auto-deploy |
 
 **Goal shift (2026-11-12):** move from prototype → **production-grade, real-world
 usable** app, step by step. **First step = full UI overhaul** (Gen Z / professional

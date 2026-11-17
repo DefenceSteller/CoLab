@@ -2,7 +2,7 @@
 
 > Tracks what was built, when, and how on CoLab.
 
-## Status: Excalidraw-parity rebuild — Phase 10 (Docs, tests, deploy) — finalizing
+## Status: Excalidraw-parity rebuild — Phase 10 (Docs, tests, deploy) — ✅ COMPLETE
 
 ---
 
@@ -327,8 +327,24 @@ palette shows export options, zero page errors) · **full regression 33/33**
 **Docs:** `PROGRESS.md` Phase 8 ✅, `EXCALIDRAW_PARITY_PLAN.md` row 8 ✅,
 `WORKLOG.md` this entry.
 
-**Next:** Phase 9 — Realtime sync (`update-elements` / `selection` / `laser`
-events, room-state merge on rejoin, cursor rendering, conflict-safe versioning).
+**Next:** Phase 10 — Docs, tests, deploy (final docs, full test pass, commit + push → Vercel/Railway auto-deploy).
+
+---
+
+### 2026-11-17 — **Excalidraw-parity Phase 10 (Docs, tests, deploy) — COMPLETE**
+
+**Shipped (committed `e10cd2a`, pushed `a97cc30..e10cd2a`):**
+
+- **Build:** `vite build` clean — 1750 modules transformed, chunks rendered.
+- **Tests:** Phase 7 smoke 25/25 · Phase 8 smoke 14/14 · full regression 33/33 — **72/72 green**.
+- **Commit:** `git commit -m "Excalidraw-parity Phases 1-10: foundation, viewport, selection, tools, panel, history, shortcuts, export, realtime sync"` — 22 files changed, 3518 insertions(+), 71 deletions(-).
+- **Push:** `git push origin master` → `a97cc30..e10cd2a master -> master`. Triggers Vercel frontend + Railway backend auto-deploy.
+- **Production verified live:**
+  - Frontend `https://colab-gold.vercel.app` — reachable.
+  - Backend `https://colab-production-4bce3d39.up.railway.app` — `{"status":"OK","message":"Collab Board Backend"}`.
+- **Docs:** `PROGRESS.md` Phase 10 ✅, `EXCALIDRAW_PARITY_PLAN.md` row 10 ✅, `WORKLOG.md` this entry.
+
+**Next:** Phase 11 — polish & hardening (chat UI, image upload, multi-cursor conflict resolution, offline support).
 
 ---
 
@@ -368,8 +384,7 @@ Phase 8 smoke 14/14 · full regression 33/33 — **72/72 total**.
 **Docs:** `PROGRESS.md` Phase 9 ✅, `EXCALIDRAW_PARITY_PLAN.md` row 9 ✅,
 `WORKLOG.md` this entry.
 
-**Next:** Phase 10 — Docs, tests, deploy (final docs, full test pass,
-commit + push → Vercel/Railway auto-deploy).
+**Next:** Phase 10 — Docs, tests, deploy (final docs, full test pass, commit + push → Vercel/Railway auto-deploy).
 
 ---
 
