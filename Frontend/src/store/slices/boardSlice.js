@@ -77,6 +77,12 @@ const boardSlice = createSlice({
       state.selectedIds = [];
     },
 
+    // Replace all elements (layer reordering: bring-to-front / send-to-back).
+    // Does NOT snapshot — callers should wrap in beginHistory() themselves.
+    setElements: (state, action) => {
+      state.elements = action.payload;
+    },
+
     clearBoard: (state) => {
       state.elements = [];
       state.history = [];
@@ -88,14 +94,19 @@ const boardSlice = createSlice({
       if (state.history.length > 0) {
         state.future.push(state.elements.map((el) => ({ ...el })));
         state.elements = state.history.pop();
-        state.selectedIds = [];
+        // Keep selection on whatever survived the undo (Excalidraw
+        // preserves selection across undo — elements that still exist
+        // stay selected, removed ones drop out).
+        const alive = new Set(state.elements.map((el) => el.id));
+        state.selectedIds = state.selectedIds.filter((id) => alive.has(id));
       }
     },
     redo: (state) => {
       if (state.future.length > 0) {
         state.history.push(state.elements.map((el) => ({ ...el })));
         state.elements = state.future.pop();
-        state.selectedIds = [];
+        const alive = new Set(state.elements.map((el) => el.id));
+        state.selectedIds = state.selectedIds.filter((id) => alive.has(id));
       }
     },
 
@@ -134,6 +145,17 @@ const boardSlice = createSlice({
     setRoomUsers: (state, action) => {
       state.roomUsers = action.payload;
     },
+
+    // ---------- property panel: push style changes onto selected elements ----------
+    setElementStyle: (state, action) => {
+      const { ids, changes } = action.payload;
+      const idSet = new Set(ids);
+      for (const el of state.elements) {
+        if (!idSet.has(el.id)) continue;
+        Object.assign(el, changes);
+        el.version = (el.version || 1) + 1;
+      }
+    },
   },
 });
 
@@ -144,6 +166,7 @@ export const {
   beginHistory,
   loadBoard,
   clearBoard,
+  setElements,
   undo,
   redo,
   setSelection,
@@ -155,6 +178,7 @@ export const {
   setDrawing,
   setRoomId,
   setRoomUsers,
+  setElementStyle,
 } = boardSlice.actions;
 
 export default boardSlice.reducer;

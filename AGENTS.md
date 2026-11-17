@@ -172,8 +172,8 @@ them:
 Scaffold + basic real-time drawing works. See `docs/plan/PROGRESS.md`
 for the live tracker and `docs/plan/WORKLOG.md` for history.
 
-**Roughly:** Phase 1–2 done, Phase 3 (core engine) mostly done, Phase 4
-(realtime) partial, Phase 5 (features) early, Phase 6 not started.
+**Roughly:** Phase 1–5 of the Excalidraw-parity rebuild done (foundation, viewport,
+selection, new tools, property panel); Phase 6 (history + text) next.
 
 ## Git
 

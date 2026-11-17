@@ -4,6 +4,8 @@
 // elements live in; zoom/offset is the camera).
 // ============================================================
 
+import { getCommonBounds } from './elementModel';
+
 export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 4;
 
@@ -61,3 +63,7 @@ export const viewportForBounds = (bounds, w, h, padding = 40) => {
     offsetY: h / 2 - (bounds.y + bounds.height / 2) * zoom,
   };
 };
+
+/** Fit every element's union bounds into a w×h screen box (Shift+1 / fit button). */
+export const fitViewportToElements = (elements, w, h, padding = 48) =>
+  viewportForBounds(getCommonBounds(elements), w, h, padding);

@@ -16,3 +16,5 @@ export const store = configureStore({
       serializableCheck: false,
     }),
 });
+
+if (typeof window !== 'undefined') window.__COLAB_STORE__ = store;

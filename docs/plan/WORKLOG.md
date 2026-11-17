@@ -2,7 +2,7 @@
 
 > Tracks what was built, when, and how on CoLab.
 
-## Status: Phase 7 (UI overhaul) in progress — prototype works, being polished for production
+## Status: Excalidraw-parity rebuild — Phase 10 (Docs, tests, deploy) — finalizing
 
 ---
 
@@ -78,6 +78,336 @@
 ---
 
 ## 🛠️ Session notes
+
+### 2026-11-17 — **Excalidraw-parity Phase 4 (New tools) built & verified**
+
+**Shipped (uncommitted, with Phases 1–3):**
+- **`utils/binding.js` (new)** — shape binders: `pointOnBounds`,
+  `findBindTarget` (only binds to rectangle/ellipse/diamond/text/image,
+  not frames or lines; `BIND_GAP = 2`), `applyBindings` (snap endpoints
+  on creation before `addElement` + `normalizeBounds`), `boundArrowChanges`
+  (recompute bound endpoints when targets move/resize/rotate).
+- **`useCanvas.js` Phase 4 wiring:** removed inert-tools guard (no more
+  `INERT_TOOLS`); laser (`pushLaser` with rAF trim loop, `LASER_LIFE =
+  1000`); image tool (`pickImage` creates imperatively a hidden `<input
+  id=colab-image-input data-testid=image-input>`, opens AFTER the gesture,
+  `placeImage` reads via FileReader, re-encodes giants via canvas → JPEG
+  q0.85 on white bg, caps natural size at 400px); frame tool (auto-named
+  `Frame N`, drag-create); image preview during drag (`dashed violet
+  rectangle`); frame content expansion (`expandWithFrames`) on move
+  gestures; `syncBoundArrows` called after each move/resize/rotate dispatch,
+  bound ids emitted too; `boundIds: new Set()` in move/resize/rotate
+  gesture constructors.
+- **`renderer.js`:** `drawLaser(ctx, points, zoom, now)` — pink `#ec4899`,
+  per-segment alpha from age, width `(2+4*a)/zoom`; `redrawOverlay` accepts
+  and renders `laser` array of `{x,y,t}` points.
+- **`Toolbar.jsx`:** Arrow (`ArrowUpRight`), Diamond (`Diamond`), Frame
+  (`Frame`), Image (`Image as Fortune`), Laser (`Zap`) buttons added.
+
+**Debug note:** phase-4 smoke failed first on the image test — BMP
+  fixture had swapped endianness in CRCs (`writeUInt32LE` instead of
+  `writeUInt32BE` for PNG chunk lengths; also CRCs were little-endian but
+  stored big-endian, giving mismatches). Chrome rejected the malformed
+  PNG silently via `onerror`. Fixed by generating a correct PNG (proper
+  big-endian lengths + CRCs). All 20/20 green after that. Also added
+  mild `console.warn` on `img.onerror` / `reader.onerror` for future
+  debugging.
+
+**Verified:** `vite build` clean (1745 modules) · **Phase 4 smoke 20/20**
+(diamond paints correctly within drag box, arrow horizontal span and
+endpoint detection, frame crisp border + edges near expected coords,
+laser trail visible during drag then fully faded after 1.5 s, hidden
+input created + image rendered via uploadFile, arrow endpoint followed
+moved rect minX 594→694, zero page errors) · **Phase 1 regression 8/8**
+· **Phase 2 regression 15/15** · **Phase 3 regression 20/20**.
+
+**Next:** Phase 6 — history + text editing (edit-in-place, stroke-level undo, copy/paste).
+
+### 2026-11-17 — **Excalidraw-parity Phase 5 (Property panel) built & verified**
+
+**Shipped (uncommitted, with Phases 1–4):**
+- **`components/Board/PropertyPanel.jsx` (new)** — floating on-canvas panel
+  (`data-testid="property-panel"`, NOT `data-ui` — that collides with
+  `ZoomControls`). Appears when `selectedIds.length > 0`. Reads the **first
+  selected element's** current values; multi-select shows a representative
+  sample and changes apply to ALL selected uniformly (Excalidraw behavior).
+  Sections: **Stroke** (10 color swatches + custom `<input type=color>`
+  picker), **Fill** (color swatches only when fill ≠ transparent, 4 fill-style
+  buttons solid/hachure/cross-hatch/zigzag + ⊘ no-fill — shape elements only),
+  **Line** (solid/dashed/dotted stroke-style + thin/med/bold width bars),
+  **Sketch** (A/N/C roughness), **Opacity** (range 0–100 + `%` label), **Font**
+  (Sans/Mono — text elements only).
+- **`store/slices/boardSlice.js`** — new `setElementStyle` reducer (applies
+  `changes` to every id in `ids`, bumps `version`) + export.
+- **`store/slices/toolSlice.js`** — existing style reducers
+  (`setColor`/`setBackgroundColor`/`setFillStyle`/`setStrokeStyle`/
+  `setStrokeWidth`/`setRoughness`/`setOpacity`/`setFontFamily`) used by the
+  panel; `setStyles` applies a batch to tool defaults.
+- **`store/store.js`** — `window.__COLAB_STORE__ = store` debug probe
+  (dev-only; used by smoke tests to read Redux state directly).
+- **`Canvas.jsx`** — imports `PropertyPanel`, renders it when
+  `selectedIds.length > 0`.
+- Style changes go through `dispatch(beginHistory())` → `dispatch(setElementStyle)`
+  (one undo step per change). Phase 9 formalizes remote sync for styles.
+
+**Verified:** `vite build` clean (1746 modules) · **Phase 5 smoke 14/14**
+(panel appears on select, fill-style buttons, 10 stroke swatches, opacity slider
++ label, 3 width bars, roughness A/N/C, panel gone after erase, text select
+shows Font section + Mono clickable, hachure style change applied to selected
+element) · **Phase 1 regression 8/8** · **Phase 2 regression 15/15** ·
+**Phase 3 regression 20/20** · **Phase 4 regression 20/20**.
+
+### 2026-11-17 — **Excalidraw-parity Phase 6 (History + text editing) built & verified**
+
+**Shipped (uncommitted, with Phases 1–5):**
+- **`useCanvas.js`** — double-click on text element enters edit-in-place mode:
+  first click records `lastClickRef {id,x,y,t}` and selects without starting
+  move gesture; second click within 500 ms / <12 px distance opens inline input
+  pre-filled with existing text (`hit.id` reused so `commitText()` updates in
+  place instead of creating a new element). Non-text elements still start move
+  gesture immediately on first click. **Copy/paste/duplicate**: `Ctrl+C` copies
+  selected ids + bbox center to clipboard; `Ctrl+V` pastes at last cursor
+  position (re-binds arrow endpoints to new ids); `Ctrl+D` duplicates selection
+  offset by 20 px. **Undo/redo**: `Ctrl+Z` / `Ctrl+Shift+Z` dispatch
+  `undo()`/`redo()` from boardSlice; selection is preserved across undo (surviving
+  elements stay selected). Added `ctrl+a` select-all handler.
+- **`store/slices/boardSlice.js`** — `undo`/`redo` reducers now preserve
+  `selectedIds` filtered to surviving element ids (was: clearing selection on
+  every undo/redo). `setElementStyle` exported for property panel use.
+- Keyboard shortcuts added: `ctrl/cmd+c` copy, `ctrl/cmd+v` paste, `ctrl/cmd+d`
+  duplicate, `ctrl/cmd+z` undo, `ctrl/cmd+shift+z` redo, `ctrl/cmd+a` select all.
+
+**Debug note:** initial double-click implementation failed because the first
+click on a text element started a move gesture immediately, so the second click
+was handled by the move handler before double-click detection could fire. Fix:
+record `lastClickRef` on first click and return early (just selecting), only
+starting the move gesture on subsequent pointer movement. Also restructured
+selection-tool `startDrawing` so hit-testing runs BEFORE handle-checking, since
+a newly-selected element's resize handles would intercept the second click.
+
+**Verified:** `vite build` clean (1746 modules) · **Phase 6 smoke 12/12**
+(text commit, double-click editor appears, edit-in-place updates text, ctrl+D
+duplicates and selects, ctrl+c/v copies/pastes, delete all empties board, undo
+restores elements and respects history cap) · **full regression 33/33** (Phases
+1–6 green).
+
+**Next:** Phase 7 — full keymap, context menu, command palette.
+
+### 2026-11-17 — **Excalidraw-parity Phase 3 (Selection engine) built & verified**
+
+**Shipped (uncommitted, with Phases 1–2):**
+- **`utils/selection.js` (new, pure geometry)** — selection box (single
+  element keeps its rotation; multi = AABB union), 8 handle + rotate-knob
+  world positions (constant screen-size via zoom), handle hit-testing,
+  marquee intersection, **resize** (works in the box's *local* frame: the
+  anchor corner stays fixed in world space while everything scales toward
+  the pointer; edge handles lock an axis; points scale, text font scales,
+  angle untouched) and **rotate** (centers swing around the box center,
+  delta normalized to ±π, shift → 15° snap). All transforms read a
+  gesture-start `origs` map → per-frame calls are **absolute, not
+  cumulative** (first draft mutated live elements and double-applied
+  on frame 2 — caught in review before testing).
+- **Selection gestures in `useCanvas.js`** — handle hit first, then
+  element hit (shift = toggle, no drag), then empty space → marquee
+  (non-shift clears first; shift keeps base selection and unions).
+  Move/resize/rotate capture `origs` at mousedown and only
+  `beginHistory()` on the **first real delta** (pure clicks don't pollute
+  undo). Mouseup emits final geometry per id (remote `addElement` upserts
+  by id — formalized as `update-elements` in Phase 9).
+- **Overlay renderer** — `redrawOverlay(canvas, {preview, hover, marquee,
+  selection})`: violet hover outline, tinted dashed marquee, selection
+  box + 8 white/ink square handles + rotate knob with stem — all sized
+  in screen px (`1/zoom`) so zooming doesn't grow them.
+- **Keyboard** — Escape deselects; Delete/Backspace removes the selection
+  (`beginHistory` + `removeElements` + `emitDelete`); both exempt while
+  typing in inputs.
+- **Defaults** — `activeTool: 'selection'` (Excalidraw's default); toolbar
+  leads with **Select** (`MousePointer2`); `move` cursor over hoverable
+  elements; hover tracked with a bail-out state setter (no rerender when
+  unchanged).
+- `resize()` / overlay effect call sites updated to the new payload shape;
+  `hoverId` returned from the hook for the cursor.
+
+**Verified:** `vite build` clean (1744 modules) · **Phase 3 smoke 20/20**
+(default Select, hover `move`/`default` cursors, click-select draws box,
+drag moves A only, Escape clears overlay, marquee selects both, shift+click
+toggles off/on, group move follows, SE handle resize anchored NW, rotate
+knob swings geometry, Delete empties the board + overlay, Undo restores,
+zero page errors) · **Phase 1 regression 8/8** · **Phase 2 regression
+15/15** (both suites updated: first drag now picks the Draw tool explicitly
+since the default flipped to selection).
+
+**Note:** one test expectation was corrected, not the code — rotating two
+corner-squares about the union center moves the *top* ink down while the
+*left* ink swings out; assertion now checks the leftward swing.
+
+**Next:** Phase 4 — new tools (diamond, arrow, frame, laser pointer,
+image insert, shape binders).
+
+### 2026-11-17 — **Excalidraw-parity Phase 7 (Shortcuts + menus) built & verified**
+
+**Shipped (uncommitted, with Phases 1–6):**
+
+- **Single-letter tool shortcuts** — `useCanvas.js` keyboard handler: V=Select,
+  H=Hand, P=Draw, L=Line, A=Arrow, R=Rect, O=Ellipse, D=Diamond, F=Frame,
+  I=Image, T=Text, E=Eraser. Guarded by `isTyping()` so they don't fire while
+  editing text or inside the inline editor.
+- **Cut (Ctrl+X)** — copies selected ids to `clipboardRef` (with bbox center for
+  anchor) **and** removes them in one undo checkpoint (`beginHistory` +
+  `removeElements` + `emitDelete`). Mirrors Excalidraw.
+- **N key → send-to-back / tie-breaker** — moves all selected elements to the
+  bottom of the z-order. Uses new `boardSlice.setElements` action (pure
+  replace, no auto-snapshot — callers wrap in `beginHistory` themselves).
+- **Right-click context menu** — `ContextMenu.jsx`: Cut / Copy / Paste /
+  Duplicate / Delete + Bring-to-front / Send-to-back + Undo / Redo.
+  **Rendered by `Canvas.jsx`, not `useCanvas`** — the `contextmenu` event
+  listener needs a live DOM node, and React hasn't painted yet when the hook's
+  `useEffect` runs (verified: `containerRef.current` was null inside the hook,
+  so the listener never attached). Menu dismisses on Escape, outside click, or
+  command execution. Uses `selIdsRef` so actions read the selection at
+  execution time, not at mount time.
+- **Command palette** — `CommandPalette.jsx`: VS Code–style searchable overlay
+  opened by Ctrl+K / Cmd+K. Lists all 13 tools + 8 actions (Cut/Copy/Paste/
+  Duplicate/Delete/Select All/Undo/Redo/Fit/Zoom in/Zoom out). ↑↓ navigate,
+  Enter selects, Esc closes, click-outside dismisses. Filters live as you type
+  (matches label or shortcut).
+- **Zoom-with-scroll-wheel preference** — `toolSlice.zoomWithWheel` (default
+  **OFF** — Excalidraw makes this opt-in). When ON, plain wheel zooms at the
+  canvas center instead of panning. Toggled via a settings gear button on the
+  toolbar (`Toolbar.jsx`).
+- **Globals exposed for child-component access** — `window.__COLAB_STORE__`
+  (already existed), `window.__COLAB_CLIPBOARD__` (clipboard ref),
+  `window.__COLAB_EMIT_DELETE` (socket emit helper),
+  `window.__FIT_TO_CONTENT` (viewport fit), `window.__ZOOM_STEP` (zoom by
+  factor). These let `ContextMenu` / `CommandPalette` dispatch Redux actions
+  and emit socket events without prop-drilling through `Canvas`.
+
+**Verified:** `vite build` clean (1748 modules) · **Phase 7 smoke 25/25**
+(tool shortcuts, context menu open+dismiss, command palette open+filter+close,
+zoomWithWheel toggle, Ctrl+X cut, N-key send-to-back, zero page errors) ·
+**full regression 33/33** (Phases 1–7 all green — 58/58 total).
+
+**Docs:** `PROGRESS.md` Phase 7 ✅, `EXCALIDRAW_PARITY_PLAN.md` row 7 ✅,
+`WORKLOG.md` this entry.
+
+**Next:** Phase 8 — Export/import (PNG/SVG/JSON clipboard & file).
+
+---
+
+### 2026-11-17 — **Excalidraw-parity Phase 8 (Export/import) built & verified**
+
+**Shipped (uncommitted, with Phases 1–7):**
+
+- **`utils/export.js` (new)** — `serializeElements(elements, viewport)` /
+  `deserializeScene(text)` for JSON round-trip; `toPngBlob(elements, {width,height})`
+  renders via offscreen canvas using the same `redrawScene` pipeline with a
+  computed viewport (union AABB → fit-to-rect with 24 px padding);
+  `downloadFile(blob, filename)` triggers a browser download and revokes the
+  object URL after 1 s; `writeImageToClipboard(blob)` wraps the Async Clipboard API.
+- **Globals exposed**: `window.__EXPORT_PNG`, `window.__EXPORT_JSON`,
+  `window.__OPEN_IMPORT_DIALOG`, `window.__DESERIALIZE_SCENE`.
+- **Toolbar**: PNG export button (`title="Export view as PNG (Ctrl+S)"`),
+  JSON export button, Import button.
+- **Keyboard shortcuts**: Ctrl+S = export PNG, Ctrl+O = open import dialog.
+- **Command palette**: added "Export as PNG" / "Export as JSON" /
+  "Import scene" actions wired through globals.
+- **Canvas.jsx**: import dialog overlay (`fixed inset-0 z-[90]`) with textarea,
+  "Open file…" label (hidden `<input type=file accept=".json">`), "Import"
+  button, and "Cancel". Drag-and-drop of `.json` onto canvas dispatches
+  `colab-raw-scene-json`; paste of image data or JSON string also handled.
+  Canvas listens on `colab-raw-scene-json` and loads into board via
+  `boardSlice.loadBoard` + `viewport/setViewport`.
+
+**Verified:** `vite build` clean (1750 modules) · **Phase 8 smoke 14/14**
+(toolbar buttons present, globals exposed, PNG export creates file, JSON
+export valid + contains rectangle, scene imported from dialog, command
+palette shows export options, zero page errors) · **full regression 33/33**
+(Phases 1–8 all green — 47/47 total).
+
+**Docs:** `PROGRESS.md` Phase 8 ✅, `EXCALIDRAW_PARITY_PLAN.md` row 8 ✅,
+`WORKLOG.md` this entry.
+
+**Next:** Phase 9 — Realtime sync (`update-elements` / `selection` / `laser`
+events, room-state merge on rejoin, cursor rendering, conflict-safe versioning).
+
+---
+
+### 2026-11-17 — **Excalidraw-parity Phase 9 (Realtime sync) built & verified**
+
+**Shipped (uncommitted, with Phases 1–8):**
+
+- **Backend `server.js` rewritten**:
+  - `draw` now **upserts by id** — replaces any existing element with the
+    same id instead of appending, so replays are clean (no duplicates).
+  - New **`update-elements`** event: upserts by id + broadcasts to room.
+    Used for move/resize/rotate final state.
+  - New **`laser-point`** event: each laser point streamed live to the room
+    so collaborators see the trail grow.
+  - **`cursor-move`** now relayed within room (was missing on the server —
+    only frontend listeners existed, so cursors were never shared).
+  - **`user-left`** broadcast added on disconnect so remaining members get
+    the update (previously only `room-users` was emitted on leave).
+- **Frontend `useSocket.js`**:
+  - New listeners: `update-elements` (dispatches `addElement` per item —
+    idempotent upsert, no duplicates), `laser-point` (accumulates into
+    `window.__COLAB_REMOTE_LASERS`, bounded at 400).
+  - New emit helpers: `emitUpdateElements`, `emitLaserPoint`.
+- **`useCanvas.js`**:
+  - Cursor position now emitted on every mousemove (throttled ~15 Hz) with
+    `userId`/`username`/`tool` payload.
+  - Laser points emitted individually as they're pushed.
+  - Move/resize/rotate final state now emitted via `emitUpdateElements`
+    instead of `emitDraw`.
+- **`renderer.js`**: new `drawRemoteLasers` helper draws remote collaborator
+  laser trails grouped by user with pink color + username label at the head.
+- **`Canvas.jsx`**: passes `emitUpdateElements` through to `useCanvas`.
+
+**Verified:** `vite build` clean (1750 modules) · Phase 7 smoke 25/25 ·
+Phase 8 smoke 14/14 · full regression 33/33 — **72/72 total**.
+
+**Docs:** `PROGRESS.md` Phase 9 ✅, `EXCALIDRAW_PARITY_PLAN.md` row 9 ✅,
+`WORKLOG.md` this entry.
+
+**Next:** Phase 10 — Docs, tests, deploy (final docs, full test pass,
+commit + push → Vercel/Railway auto-deploy).
+
+---
+
+
+**Shipped (uncommitted, with Phase 1):**
+- **Excalidraw wheel semantics** (verified against Excalidraw source/search):
+  plain wheel = pan · shift+wheel = horizontal pan · ctrl/cmd+wheel (and
+  trackpad pinch) = zoom at cursor · page-scroll hijack prevented · wheel
+  ignored over inline editor / floating UI (`input, [data-ui]` guard).
+  "Zoom with scroll wheel" is an opt-in Excalidraw preference → deferred to
+  Phase 7 (menus).
+- **Panning** — space-hold drag, middle-button drag (also kills Chrome
+  autoscroll), and the new **Hand** tool (first button in the toolbar).
+  `viewportSlice` gained `panning`/`spaceHeld` + actions; `draw()` handles a
+  `pan` gesture in screen-space deltas.
+- **`ZoomControls.jsx` (new)** — floating bottom-left widget: − /
+  % (click = reset 100%) / + / fit-to-content, neobrutal `.tool-btn` style,
+  marked `data-ui` so canvas gestures ignore it.
+- **Shortcuts** — `+`/`=` zoom in, `-`/`_` zoom out (center-anchored),
+  `Shift+1` = fit-to-content, Space = temporary pan (released on keyup or
+  window blur; typing in inputs is exempt).
+- **`fitViewportToElements`** added to `viewport.js` (union bounds → camera).
+- **Cursors** — `grabbing` while panning, `grab` while space held.
+- Removed `hand` from `INERT_TOOLS`; toolbar now leads with the Hand button.
+
+**Verified:** `vite build` clean (1743 modules) · **Phase 2 smoke 15/15**
+(initial 100% zoom, ctrl+wheel zoom, plain-wheel no-zoom pan, zoom buttons +
+reset, hand pan, space-pan, Shift+1 fit, zero page errors) · **Phase 1
+regression 8/8**. (One early smoke run had a transient 0-px first stroke —
+first-run timing after HMR; identical debug drag + re-runs pass consistently.)
+
+**Docs:** created `docs/plan/EXCALIDRAW_PARITY_PLAN.md` (the current 10-phase
+plan + status + key files) and marked `PHASE_1..7_*.md` as the **historical**
+original plan in `PROGRESS.md`, so an outsider isn't confused by the two
+phase-numbering schemes. `PROGRESS.md` updated (Phase 2 ✅, Phase 3 next).
+
+**Next:** Phase 3 — selection engine (click/shift-click, marquee, move /
+resize / rotate handles; default tool flips to `selection`).
 
 ### 2026-11-17 — **Excalidraw-parity plan: Phase 1 (Foundation) built & verified**
 
@@ -343,7 +673,7 @@ refreshed).
 
 ---
 
-**Last updated:** 2026-11-17
+**Last updated:** 2026-11-17 (Phase 9 done)
 **Project:** CoLab collaborative drawing board
 **From:** empty repo → React + Socket.io real-time drawing prototype
 **To:** (planned) full collaborative whiteboard with chat, rooms, persistence, auth

@@ -1,19 +1,27 @@
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 import {
-  setTool, setColor, setBrushSize, setStrokeWidth,
+  setTool, setColor, setBrushSize, setStrokeWidth, setZoomWithWheel,
 } from '../../store/slices/toolSlice';
 import {
-  Pencil, Square, Circle, Type, Eraser, Minus,
-  Palette, Undo2, Redo2, Trash2,
+  MousePointer2, Hand, Pencil, Square, Circle, Type, Eraser, Minus,
+  Diamond, ArrowUpRight, Image as Fortune, Frame, Zap,
+  Palette, Undo2, Redo2, Trash2, Settings2, Download, Upload,
 } from 'lucide-react';
 
 // Excalidraw-parity tool ids (see utils/elementModel.js ELEMENT_TYPES)
 const TOOLS = [
+  { id: 'selection', label: 'Select', icon: <MousePointer2 size={16} /> },
+  { id: 'hand', label: 'Hand', icon: <Hand size={16} /> },
   { id: 'freedraw', label: 'Draw', icon: <Pencil size={16} /> },
   { id: 'line', label: 'Line', icon: <Minus size={16} /> },
+  { id: 'arrow', label: 'Arrow', icon: <ArrowUpRight size={16} /> },
   { id: 'rectangle', label: 'Rect', icon: <Square size={16} /> },
   { id: 'ellipse', label: 'Ellipse', icon: <Circle size={16} /> },
+  { id: 'diamond', label: 'Diamond', icon: <Diamond size={16} /> },
+  { id: 'frame', label: 'Frame', icon: <Frame size={16} /> },
+  { id: 'image', label: 'Image', icon: <Fortune size={16} /> },
+  { id: 'laser', label: 'Laser', icon: <Zap size={16} /> },
   { id: 'text', label: 'Text', icon: <Type size={16} /> },
   { id: 'eraser', label: 'Eraser', icon: <Eraser size={16} /> },
 ];
@@ -27,7 +35,7 @@ const Divider = () => <div className="w-0.5 h-7 bg-ink/15 mx-1 shrink-0" />;
 
 const Toolbar = ({ onUndo, onRedo, onClear }) => {
   const dispatch = useDispatch();
-  const { activeTool, color, brushSize } = useSelector((state) => state.tool);
+  const { activeTool, color, brushSize, zoomWithWheel } = useSelector((state) => state.tool);
 
   return (
     <div className="shrink-0 bg-cream border-b-2 border-ink px-3 py-2.5 flex items-center gap-2 overflow-x-auto">
@@ -108,6 +116,29 @@ const Toolbar = ({ onUndo, onRedo, onClear }) => {
         <button className="tool-btn danger" onClick={onClear} title="Clear board">
           <Trash2 size={16} />
           <span className="hidden md:inline">Clear</span>
+        </button>
+        <Divider />
+        <button
+          className={`tool-btn ${zoomWithWheel ? 'active' : ''}`}
+          onClick={() => dispatch(setZoomWithWheel(!zoomWithWheel))}
+          title={zoomWithWheel ? 'Wheel zoom ON (click to disable)' : 'Wheel zoom OFF (click to enable)'}
+          aria-pressed={zoomWithWheel}
+        >
+          <Settings2 size={16} />
+          <span className="hidden md:inline">Wheel zoom</span>
+        </button>
+        <Divider />
+        <button className="tool-btn" onClick={() => window.__EXPORT_PNG?.()} title="Export view as PNG (Ctrl+S)">
+          <Download size={16} />
+          <span className="hidden md:inline">PNG</span>
+        </button>
+        <button className="tool-btn" onClick={() => window.__EXPORT_JSON?.()} title="Export scene as JSON (Ctrl+S + Shift)">
+          <Download size={16} />
+          <span className="hidden md:inline">JSON</span>
+        </button>
+        <button className="tool-btn" onClick={() => window.__OPEN_IMPORT_DIALOG?.()} title="Import scene from JSON (Ctrl+O)">
+          <Upload size={16} />
+          <span className="hidden md:inline">Import</span>
         </button>
       </div>
     </div>

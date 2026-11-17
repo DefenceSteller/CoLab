@@ -10,6 +10,9 @@
 
 import rough from 'roughjs';
 import { fontString, FONT_STACKS } from './elementModel';
+import { boxCorners, handlePoints, HANDLE_SIZE } from './selection';
+
+const SELECTION_COLOR = '#7c3aed'; // violet — the app's accent
 
 const generator = rough.generator();
 
@@ -288,18 +291,184 @@ export const redrawScene = (canvas, elements, viewport, dpr = 1) => {
   for (const el of elements) drawElement(ctx, rc, el);
 };
 
+// ---------- selection / interaction overlay ----------
+
+const strokeBoxPath = (ctx, box) => {
+  const [nw, ne, se, sw] = boxCorners(box);
+  ctx.beginPath();
+  ctx.moveTo(nw[0], nw[1]);
+  ctx.lineTo(ne[0], ne[1]);
+  ctx.lineTo(se[0], se[1]);
+  ctx.lineTo(sw[0], sw[1]);
+  ctx.closePath();
+};
+
+/** Subtle outline around the element under the pointer. */
+const drawHoverBox = (ctx, box, zoom) => {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(124, 58, 237, 0.55)'; // violet @ 55%
+  ctx.lineWidth = 2 / zoom;
+  strokeBoxPath(ctx, box);
+  ctx.stroke();
+  ctx.restore();
+};
+
+/** Marching-free marquee rect (dashed, tinted fill). */
+const drawMarquee = (ctx, rect, zoom) => {
+  const px = 1 / zoom; // world units per screen px
+  ctx.save();
+  ctx.fillStyle = 'rgba(124, 58, 237, 0.10)';
+  ctx.strokeStyle = SELECTION_COLOR;
+  ctx.lineWidth = 1.5 * px;
+  ctx.setLineDash([6 * px, 4 * px]);
+  ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+  ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+  ctx.restore();
+};
+
 /**
- * Redraw the interaction layer: in-progress preview + (later)
- * selection UI. Same transform as the base layer.
+ * Laser-pointer trail (overlay only — no elements, no history).
+ * Each point fades by age: alpha = 1 − age/LIFE, width grows with
+ * age so the head is thin and the tail swells. Life = 1000 ms.
  */
-export const redrawOverlay = (canvas, preview, viewport, dpr = 1) => {
+const drawLaser = (ctx, points, zoom, now) => {
+  if (!points || points.length < 2) return;
+  const LIFE = 1000;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#ec4899'; // pink — the app's accent
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const age = now - b.t;
+    if (age < 0) continue; // future (shouldn't happen)
+    if (age >= LIFE) continue; // expired
+    const alpha = 1 - age / LIFE;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = (2 + 4 * alpha) / zoom;
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+};
+
+/**
+ * Selection box + 8 resize handles + rotate knob. Everything is
+ * sized in screen px (converted via zoom) so handles don't grow
+ * when zooming in. Single-element boxes follow the rotation.
+ */
+const drawSelection = (ctx, box, zoom) => {
+  const px = 1 / zoom;
+  const hs = HANDLE_SIZE * px;
+  const pts = handlePoints(box, zoom);
+
+  ctx.save();
+
+  // outline
+  ctx.strokeStyle = SELECTION_COLOR;
+  ctx.lineWidth = 2 * px;
+  strokeBoxPath(ctx, box);
+  ctx.stroke();
+
+  // stem from the top edge to the rotate knob
+  const n = pts.n;
+  const rot = pts.rotate;
+  ctx.beginPath();
+  ctx.moveTo(n[0], n[1]);
+  ctx.lineTo(rot[0], rot[1]);
+  ctx.lineWidth = 1.5 * px;
+  ctx.stroke();
+
+  // 8 square handles — white fill, ink border (neobrutal)
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#101014';
+  ctx.lineWidth = 1.5 * px;
+  for (const key of ['nw', 'ne', 'se', 'sw', 'n', 'e', 's', 'w']) {
+    const [hx, hy] = pts[key];
+    ctx.fillRect(hx - hs / 2, hy - hs / 2, hs, hs);
+    ctx.strokeRect(hx - hs / 2, hy - hs / 2, hs, hs);
+  }
+
+  // rotate knob (circle)
+  ctx.beginPath();
+  ctx.arc(rot[0], rot[1], hs / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.restore();
+};
+
+/**
+ * Remote laser trail points — streamed live from other users. Each
+ * point fades by age: alpha = 1 − age/LIFE, width grows with age.
+ * Life = 1000 ms (same as local laser).
+ */
+const drawRemoteLasers = (ctx, points, zoom, now) => {
+  if (!points || points.length < 2) return;
+  const LIFE = 1000;
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  // Group by user so each collaborator's trail is a single polyline
+  const byUser = new Map();
+  for (const p of points) {
+    const k = p.userId ?? 'remote';
+    if (!byUser.has(k)) byUser.set(k, []);
+    byUser.get(k).push(p);
+  }
+  for (const [uid, pts] of byUser) {
+    ctx.strokeStyle = '#ec4899';
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1];
+      const b = pts[i];
+      const age = now - b.t;
+      if (age < 0) continue;
+      if (age >= LIFE) continue;
+      const alpha = 1 - age / LIFE;
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = (2 + 4 * alpha) / zoom;
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+    // Label at the head of the trail
+    const head = pts[pts.length - 1];
+    ctx.globalAlpha = 1;
+    ctx.font = `600 ${Math.max(10, 12 / zoom)}px "Space Grotesk", Arial, sans-serif`;
+    ctx.fillStyle = '#ec4899';
+    ctx.fillText(uid.slice(0, 4), head.x + 4, head.y - 4);
+  }
+  ctx.restore();
+};
+
+/**
+ * Redraw the interaction layer: in-progress preview + selection UI
+ * (hover outline, marquee, selection box + handles) + laser trail.
+ * Same transform as the base layer.
+ *
+ * @param overlay {preview, hover, marquee, selection, laser, remoteLaser}
+ *                — all optional; boxes in world coords ({x,y,width,height,angle?}),
+ *                laser = array of {x,y,t}.
+ */
+export const redrawOverlay = (canvas, overlay, viewport, dpr = 1) => {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
   const rc = getRough(canvas);
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  if (!preview) return;
+  if (!overlay) return;
   const { zoom, offsetX, offsetY } = viewport;
   ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * offsetX, dpr * offsetY);
-  drawElement(ctx, rc, preview);
+
+  const { preview, hover, marquee, selection, laser, remoteLaser } = overlay;
+  if (preview) drawElement(ctx, rc, preview);
+  if (hover) drawHoverBox(ctx, hover, zoom);
+  if (marquee) drawMarquee(ctx, marquee, zoom);
+  if (selection) drawSelection(ctx, selection, zoom);
+  if (laser) drawLaser(ctx, laser, zoom, performance.now());
+  if (remoteLaser && remoteLaser.length) drawRemoteLasers(ctx, remoteLaser, zoom, performance.now());
 };

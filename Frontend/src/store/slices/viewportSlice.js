@@ -6,6 +6,9 @@ const initialState = {
   zoom: 1,
   offsetX: 0,
   offsetY: 0,
+  // interaction flags (drives grab cursors in Canvas.jsx)
+  panning: false,   // a pan gesture is active (hand/space/middle-drag)
+  spaceHeld: false, // space bar is down → next drag pans
 };
 
 const viewportSlice = createSlice({
@@ -24,9 +27,15 @@ const viewportSlice = createSlice({
       state.offsetX += action.payload.dx || 0;
       state.offsetY += action.payload.dy || 0;
     },
+    setPanning: (state, action) => {
+      state.panning = !!action.payload;
+    },
+    setSpaceHeld: (state, action) => {
+      state.spaceHeld = !!action.payload;
+    },
     resetViewport: () => initialState,
   },
 });
 
-export const { setViewport, panBy, resetViewport } = viewportSlice.actions;
+export const { setViewport, panBy, setPanning, setSpaceHeld, resetViewport } = viewportSlice.actions;
 export default viewportSlice.reducer;

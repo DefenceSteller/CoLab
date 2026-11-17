@@ -4,9 +4,8 @@ import { createSlice } from '@reduxjs/toolkit';
 // selection | hand | rectangle | diamond | ellipse | arrow | line |
 // freedraw | text | image | eraser | frame | laser
 const initialState = {
-  // 'freedraw' until the selection engine lands (Phase 3), which
-  // flips the default to 'selection' like Excalidraw.
-  activeTool: 'freedraw',
+  // Excalidraw's default — the selection engine landed in Phase 3.
+  activeTool: 'selection',
   // stroke / fill (Excalidraw's two color rows)
   color: '#101014',            // strokeColor
   backgroundColor: 'transparent', // fill
@@ -19,6 +18,9 @@ const initialState = {
   fontSize: 16,
   fontFamily: 'sans',          // sans | hand | mono (see elementModel FONT_STACKS)
   textAlign: 'left',
+  // Preference: plain wheel = zoom (instead of pan). Excalidraw makes this
+  // opt-in; we mirror that — default is OFF (plain wheel pans as before).
+  zoomWithWheel: false,
 };
 
 const toolSlice = createSlice({
@@ -66,6 +68,9 @@ const toolSlice = createSlice({
       Object.assign(state, action.payload);
     },
     resetTool: () => initialState,
+    setZoomWithWheel: (state, action) => {
+      state.zoomWithWheel = !!action.payload;
+    },
   },
 });
 
@@ -84,6 +89,7 @@ export const {
   setTextAlign,
   setStyles,
   resetTool,
+  setZoomWithWheel,
 } = toolSlice.actions;
 
 export default toolSlice.reducer;

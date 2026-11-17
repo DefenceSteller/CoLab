@@ -15,7 +15,6 @@ const server = http.createServer((req, res) => {
 });
 
 // Allowed origins — comma-separated list via CORS_ORIGIN env var
-// (local dev: http://localhost:5173, prod: https://colab-gold.vercel.app)
 const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:5173')
     .split(',')
     .map((origin) => origin.trim())
@@ -63,6 +62,8 @@ io.on('connection', (socket) => {
         socket.data.roomId = null;
         if (!room) return;
         room.members.delete(socket.id);
+        // Notify remaining members
+        io.to(roomId).emit('user-left', { id: socket.id });
         io.to(roomId).emit('room-users', memberList(room));
         // Empty rooms are kept (until server restart) so shared links stay valid.
     };
@@ -106,19 +107,48 @@ io.on('connection', (socket) => {
 
     socket.on('leave-room', () => leaveCurrentRoom());
 
-    // ---- drawings: stored per room + relayed only within the room ----
+    // ---- drawings: upsert by id (store + relay) ----
+    // The old behavior appended every draw, causing duplicates after
+    // move/resize/rotate re-emitted the same element object.  Now we
+    // replace any existing entry with the same id so replays are clean.
     socket.on('draw', (data) => {
         const roomId = socket.data.roomId;
         if (!roomId) return;                 // not in a room → ignore
         const room = rooms.get(roomId);
         if (!room) return;
         if (room.elements.length >= MAX_ROOM_ELEMENTS) room.elements.shift();
-        room.elements.push(data);
-        socket.to(roomId).emit('draw', data); // everyone in the room except sender
+        // Upsert: replace existing element with same id, or append
+        const idx = room.elements.findIndex((el) => el && el.id === data.id);
+        if (idx >= 0) {
+            room.elements[idx] = data;
+        } else {
+            room.elements.push(data);
+        }
+        socket.to(roomId).emit('draw', data); // everyone except sender
+    });
+
+    // ---- explicit element-update relay (move/resize final state) ----
+    // Same semantics as draw — upsert + broadcast.  Used so the frontend
+    // can distinguish "new element" from "existing element changed position".
+    socket.on('update-elements', (updates) => {
+        // updates = array of {id, ...rest}  OR  single element object (legacy compat)
+        const roomId = socket.data.roomId;
+        if (!roomId) return;
+        const room = rooms.get(roomId);
+        if (!room) return;
+        const items = Array.isArray(updates) ? updates : [updates];
+        for (const el of items) {
+            const idx = room.elements.findIndex((e) => e && e.id === el.id);
+            if (idx >= 0) {
+                room.elements[idx] = el;
+            } else {
+                room.elements.push(el);
+            }
+        }
+        socket.to(roomId).emit('update-elements', updates);
     });
 
     // ---- eraser: remove by id — prune room state + relay to the room ----
-    // (additive event: old clients simply don't listen for it)
     socket.on('delete-elements', (ids) => {
         const roomId = socket.data.roomId;
         if (!roomId || !Array.isArray(ids) || ids.length === 0) return;
@@ -146,6 +176,40 @@ io.on('connection', (socket) => {
             userId: socket.id,
             message,
             timestamp: new Date().toISOString(),
+        });
+    });
+
+    // ---- cursor position: broadcast within room ----
+    socket.on('cursor-move', (data) => {
+        const roomId = socket.data.roomId;
+        if (!roomId) return;
+        // data = { x, y, tool, username }
+        socket.to(roomId).emit('cursor-move', {
+            id: socket.id,
+            username: data?.username ?? socket.data.username ?? 'Guest',
+            x: data?.x,
+            y: data?.y,
+            tool: data?.tool,
+            timestamp: Date.now(),
+        });
+    });
+
+    // ---- laser trail points: relay individual points to room ----
+    // Each point fades on receiver side via rAF trim loop; nothing stored.
+    socket.on('laser-point', (point) => {
+        const roomId = socket.data.roomId;
+        if (!roomId) return;
+        point.userId = socket.id;
+        socket.to(roomId).emit('laser-point', point);
+    });
+
+    // ---- selection change: notify room (nice-to-have) ----
+    socket.on('selection-change', (selectedIds) => {
+        const roomId = socket.data.roomId;
+        if (!roomId) return;
+        socket.to(roomId).emit('selection-change', {
+            id: socket.id,
+            selectedIds,
         });
     });
 

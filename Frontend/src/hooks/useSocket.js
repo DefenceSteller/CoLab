@@ -86,6 +86,21 @@ export const useSocketListeners = () => {
     const onChatMessage = (data) => dispatch(addChatMessage(data));
     const onClearBoard = () => dispatch(clearBoard());
     const onRoomUsers = (members) => dispatch(setRoomUsers(members));
+    // Phase 9: explicit element updates (move/resize/rotate final state).
+    // The server upserts by id before broadcasting, so remote clients
+    // receive clean single-entry elements — no duplicates after replays.
+    const onUpdateElements = (updates) => {
+      if (!Array.isArray(updates)) updates = [updates];
+      for (const el of updates) dispatch(addElement(el));
+    };
+    // Laser trail points streamed live from other users.
+    // Stored in a module-level array so renderer can draw them during overlay repaints.
+    const onLaserPoint = (pt) => {
+      if (!window.__COLAB_REMOTE_LASERS) window.__COLAB_REMOTE_LASERS = [];
+      window.__COLAB_REMOTE_LASERS.push({ ...pt, userId: pt.userId ?? 'remote' });
+      if (window.__COLAB_REMOTE_LASERS.length > 400)
+        window.__COLAB_REMOTE_LASERS.splice(0, window.__COLAB_REMOTE_LASERS.length - 400);
+    };
 
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
@@ -96,6 +111,8 @@ export const useSocketListeners = () => {
     socket.on('chat-message', onChatMessage);
     socket.on('clear-board', onClearBoard);
     socket.on('room-users', onRoomUsers);
+    socket.on('update-elements', onUpdateElements);
+    socket.on('laser-point', onLaserPoint);
 
     // The singleton may already be connected before this mounts
     // (e.g. StrictMode remount) — sync state right away.
@@ -111,6 +128,8 @@ export const useSocketListeners = () => {
       socket.off('chat-message', onChatMessage);
       socket.off('clear-board', onClearBoard);
       socket.off('room-users', onRoomUsers);
+      socket.off('update-elements', onUpdateElements);
+      socket.off('laser-point', onLaserPoint);
     };
   }, [dispatch]);
 };
@@ -168,6 +187,8 @@ export const useSocket = () => {
   const emitCursorMove = (position) => socket.emit('cursor-move', position);
   const emitChatMessage = (message) => socket.emit('chat-message', message);
   const emitClearBoard = () => socket.emit('clear-board');
+  const emitUpdateElements = (updates) => socket.emit('update-elements', updates);
+  const emitLaserPoint = (point) => socket.emit('laser-point', point);
 
   return {
     socket,
@@ -176,6 +197,8 @@ export const useSocket = () => {
     emitCursorMove,
     emitChatMessage,
     emitClearBoard,
+    emitUpdateElements,
+    emitLaserPoint,
     createRoom,
     joinRoom,
   };
