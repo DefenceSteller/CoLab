@@ -41,6 +41,7 @@ function Session() {
   const [status, setStatus] = useState('idle'); // 'idle' | 'joining' | 'creating'
   const [error, setError] = useState(null);
   const [showShare, setShowShare] = useState(false);
+  const [isSolo, setIsSolo] = useState(false); // no shareable URL param
 
   /** Leave current session → back to landing */
   const handleLeave = () => {
@@ -63,6 +64,7 @@ function Session() {
         if (res && res.ok) {
           dispatch(setRoomId(res.roomId));
           dispatch(loadBoard(res.elements)); // replay strokes already on the board
+          setIsSolo(false);
           setView('board');
           setError(null);
         } else {
@@ -102,6 +104,7 @@ function Session() {
         dispatch(setRoomId(res.roomId));
         dispatch(loadBoard(res.elements));
         setUrlRoom(res.roomId); // URL becomes shareable: /?room=ABC123
+        setIsSolo(false);
         setView('board');
         setShowShare(true); // ← the link popup the user asked for
       } else {
@@ -114,16 +117,36 @@ function Session() {
     }
   };
 
+  // "Draw solo" → create room silently, no share modal, no URL param
+  const handleSolo = () => {
+    setStatus('creating');
+    setError(null);
+    createRoom(username).then((res) => {
+      setStatus('idle');
+      if (!res?.ok) {
+        setError("Couldn't connect — check your network and try again.");
+        return;
+      }
+      dispatch(setRoomId(res.roomId));
+      dispatch(loadBoard(res.elements));
+      // No setUrlRoom call — URL stays clean (/) so there's no persistent link
+      setIsSolo(true);
+      setView('board');
+    });
+  };
+
   if (view === 'board') {
     return (
       <>
-        <BoardPage onShare={() => setShowShare(true)} onLeave={handleLeave} />
+        <BoardPage onShare={() => setShowShare(true)} onLeave={handleLeave} isSolo={isSolo} />
         {showShare && <ShareModal onClose={() => setShowShare(false)} />}
       </>
     );
   }
 
-  return <Landing onStart={handleStart} status={status} error={error} />;
+  return (
+    <Landing onStart={handleStart} onSolo={handleSolo} status={status} error={error} />
+  );
 }
 
 function App() {

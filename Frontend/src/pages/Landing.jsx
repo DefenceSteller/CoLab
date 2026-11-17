@@ -7,7 +7,7 @@ import { ArrowRight, Loader2, TriangleAlert, Users, Zap } from 'lucide-react';
  * - status 'joining'  → we're jumping into a session from a shared link
  * - error             → link was full / expired (shown as a banner)
  */
-const Landing = ({ onStart, status, error }) => {
+const Landing = ({ onStart, onSolo, status, error }) => {
   const joining = status === 'joining';
   const creating = status === 'creating';
 
@@ -93,6 +93,28 @@ const Landing = ({ onStart, status, error }) => {
 
               <p className="mt-5 inline-flex items-center gap-1.5 text-xs font-bold opacity-60">
                 <Users size={14} /> up to 5 people per session link
+              </p>
+
+              {/* solo / guest CTA */}
+              <button
+                onClick={onSolo}
+                disabled={creating || joining}
+                className="mt-4 inline-flex items-center gap-2 bg-white border-2 border-ink rounded-2xl px-6 py-3 text-sm font-bold shadow-[4px_4px_0_#101014] cursor-pointer transition-transform duration-100 hover:-translate-y-0.5 active:translate-x-1.5 active:translate-y-1.5 active:shadow-[0_0_0_#101014] disabled:opacity-70 disabled:cursor-wait"
+                title="Open a private board with no shareable link"
+              >
+                <Zap size={14} />
+                {creating || joining ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    getting ready…
+                  </>
+                ) : (
+                  <>draw solo — no link needed</>
+                )}
+              </button>
+
+              <p className="mt-3 text-xs font-medium opacity-50">
+                jump straight into a blank canvas; exit anytime to return here.
               </p>
 
               <p className="mt-2 text-xs font-medium opacity-50">

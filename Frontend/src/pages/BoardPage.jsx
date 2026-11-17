@@ -6,7 +6,7 @@ import { clearBoard, undo, redo } from '../store/slices/boardSlice';
 import { useSocket } from '../hooks/useSocket';
 import { Share2, Users, LogOut } from 'lucide-react';
 
-const BoardPage = ({ onShare, onLeave }) => {
+const BoardPage = ({ onShare, onLeave, isSolo }) => {
   const dispatch = useDispatch();
   const { emitClearBoard } = useSocket();
   const { username, isConnected, color } = useSelector((state) => state.user);
@@ -59,16 +59,18 @@ const BoardPage = ({ onShare, onLeave }) => {
           </span>
         </div>
 
-        {/* Right side: share + user chip */}
+        {/* Right side: share (hidden in solo) + user chip */}
         <div className="flex items-center gap-2">
-          <button
-            onClick={onShare}
-            className="tool-btn bg-lime"
-            title="Copy the invite link"
-          >
-            <Share2 size={14} />
-            Share
-          </button>
+          {!isSolo && (
+            <button
+              onClick={onShare}
+              className="tool-btn bg-lime"
+              title="Copy the invite link"
+            >
+              <Share2 size={14} />
+              Share
+            </button>
+          )}
           <button
             onClick={onLeave}
             className="tool-btn bg-bubble text-ink"
